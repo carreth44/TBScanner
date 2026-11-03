@@ -9,7 +9,10 @@
 <title>TBScanner</title>
 <meta name="application-name" content="TBScanner">
 <meta name="apple-mobile-web-app-title" content="TBScanner">
-<script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.31.1/dist/ort.wasm.min.js"></script>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" type="image/png" href="icone-192.png">
+<link rel="apple-touch-icon" href="icone-192.png">
+<script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.31.1/dist/ort.wasm.min.js" crossorigin="anonymous"></script>
 <style>
   :root { --vert:#2e8b57; --vertc:#3ddc84; --orange:#f0a020; }
   * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
@@ -734,6 +737,9 @@ $('vider').onclick = () => {
 };
 
 // ================= Démarrage =================
+// Appli installable et utilisable hors ligne (sw.js) ; stockage persistant pour que le moteur (~30 Mo) ne soit pas effacé
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(e => console.warn('service worker :', e));
+try { navigator.storage && navigator.storage.persist && navigator.storage.persist(); } catch {}
 (async () => {
   majBadge();
   const camOk = await demarrerCamera();
