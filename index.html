@@ -6,8 +6,10 @@
 <meta name="theme-color" content="#000000">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
-<title>Codes TB</title>
-<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+<title>TBScanner</title>
+<meta name="application-name" content="TBScanner">
+<meta name="apple-mobile-web-app-title" content="TBScanner">
+<script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.31.1/dist/ort.wasm.min.js"></script>
 <style>
   :root { --vert:#2e8b57; --vertc:#3ddc84; --orange:#f0a020; }
   * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
@@ -105,7 +107,7 @@
 <div id="viseur"></div>
 
 <div id="haut">
-  <h1>📷 Codes TB</h1>
+  <h1>📷 TBScanner</h1>
   <button class="rond" id="btnTorche" title="Lampe" style="display:none">🔦</button>
   <label class="rond" for="galerie" title="Photos de la galerie" style="display:flex;align-items:center;justify-content:center">🖼️</label>
   <input type="file" id="galerie" accept="image/*" multiple>
@@ -244,64 +246,192 @@ document.addEventListener('visibilitychange', async () => {
 });
 
 // ================= Prétraitement =================
-// source : vidéo ou image ; zone : rectangle source ; inverser : négatif (gravure claire sur fond sombre)
-function preparer(source, zone, inverser, largeur = 1200) {
-  const k = Math.min(3, largeur / zone.w);
+// source : vidéo ou image ; zone : rectangle source → pixels RGBA, plus grand côté ≤ cote
+function preparer(source, zone, cote = 1280) {
+  const k = Math.min(2, cote / Math.max(zone.w, zone.h));
   const cv = document.createElement('canvas');
-  cv.width = Math.round(zone.w * k); cv.height = Math.round(zone.h * k);
+  cv.width = Math.max(32, Math.round(zone.w * k)); cv.height = Math.max(32, Math.round(zone.h * k));
   const ctx = cv.getContext('2d', { willReadFrequently:true });
   ctx.imageSmoothingQuality = 'high';
   ctx.drawImage(source, zone.x, zone.y, zone.w, zone.h, 0, 0, cv.width, cv.height);
-  const d = ctx.getImageData(0, 0, cv.width, cv.height), p = d.data;
-  const hist = new Uint32Array(256), g = new Uint8ClampedArray(p.length / 4);
-  for (let i = 0, j = 0; i < p.length; i += 4, j++) { const v = (p[i]*.299 + p[i+1]*.587 + p[i+2]*.114) | 0; g[j] = v; hist[v]++; }
-  let n = 0, lo = 0, hi = 255; const tot = g.length;
-  for (let v = 0; v < 256; v++) { n += hist[v]; if (n > tot * .02) { lo = v; break; } }
-  n = 0; for (let v = 255; v >= 0; v--) { n += hist[v]; if (n > tot * .02) { hi = v; break; } }
-  const e = 255 / Math.max(1, hi - lo);
-  for (let i = 0, j = 0; i < p.length; i += 4, j++) { let v = (g[j] - lo) * e; if (inverser) v = 255 - v; p[i] = p[i+1] = p[i+2] = v; }
-  ctx.putImageData(d, 0, 0);
-  return cv;
+  return ctx.getImageData(0, 0, cv.width, cv.height);
 }
 
 // ================= Extraction des codes =================
-const MOTS = new Set(['TRAVEL','GEOCACHING','GEOCACHE','TRACKABLE','GROUNDSPEAK','GEOCOIN','PLEASE','THANKS','MOVEME','TRACKING','NUMBER','REGISTER','LOGTHIS','VISITE','SEATTLE']);
-function candidats(texte) {
+// Mots imprimés sur les tags (jamais des codes)
+const MOTS = new Set(['TRAVEL','TRAVELBUG','BUG','GEOCACHING','GEOCACHINGCOM','GEOCACHE','CACHE','TRACKABLE','TRACKABLEAT',
+  'GROUNDSPEAK','GEOCOIN','PLEASE','THANKS','MOVEME','TRACKING','TRACK','NUMBER','REGISTER','LOGTHIS','VISIT','VISITE',
+  'SEATTLE','MEMORY','MAKER','MEMORYMAKER','DONOT','KEEP','KEEPME','TRACKTHIS','WWW','COM']);
+// Morceaux de 4 lettres de ces mots : un fragment comme « CHINGCOM » ou « KABLE » n'est pas un code
+const FRAGMENTS = new Set();
+['GEOCACHINGCOM','TRACKABLE','TRAVEL','GROUNDSPEAK','GEOCOIN','MEMORY','MAKER'].forEach(m => { for (let i = 0; i + 4 <= m.length; i++) FRAGMENTS.add(m.slice(i, i + 4)); });
+const fragment = c => { for (let i = 0; i + 4 <= c.length; i++) if (FRAGMENTS.has(c.slice(i, i + 4))) return true; return false; };
+// Règles des codes de suivi : 6 caractères ; à partir du 3e, jamais O, I, S (→ 0, 1, 5), ni L, U
+// (les 2 premiers peuvent être un préfixe de fabricant : on n'y touche pas)
+function corriger(c) {
+  return c.slice(0, 2) + c.slice(2).replace(/O/g, '0').replace(/I/g, '1').replace(/S/g, '5');
+}
+// lignes : [{ texte, conf }] renvoyées par le moteur OCR → codes probables, du plus sûr au moins sûr
+function candidats(lignes) {
   const sc = new Map();
-  const noter = (c, bonus) => {
-    if (c.length < 5 || c.length > 8 || MOTS.has(c)) return;
-    let s = bonus + (c.length === 6 ? 3 : 1);
-    if (/[A-Z]/.test(c) && /[0-9]/.test(c)) s += 2;
-    if (/^[0-9]+$/.test(c)) s -= 2;
-    if (/^TB[0-9A-Z]+$/.test(c)) s -= 3;
+  const noter = (brut, s0) => {
+    if (brut.length < 5 || brut.length > 8 || MOTS.has(brut) || fragment(brut)) return;
+    const c = corriger(brut);
+    let s = s0 + (c.length === 6 ? 3 : -1);
+    if (/[A-Z]/.test(c) && /[0-9]/.test(brut)) s += 2;   // chiffre réellement lu (pas issu d'une correction)
+    if (/^[0-9]+$/.test(c)) s -= 4;
+    if (/^TB/.test(c)) s -= 3;                       // référence publique TBxxxx, pas le code de suivi
     if (/^(.)\1+$/.test(c)) s -= 5;
+    s -= 3 * (c.slice(2).match(/[LU]/g) || []).length;
+    if (MOTS.has(c)) return;
     sc.set(c, Math.max(sc.get(c) ?? -99, s));
   };
-  for (const l of texte.toUpperCase().split(/\n/)) {
-    const t = l.replace(/[^A-Z0-9 ]/g, ' ').split(/\s+/).filter(Boolean);
-    t.forEach((x, i) => {
-      noter(x, 0);
-      if (i + 1 < t.length) noter(x + t[i+1], -1);
-      if (i + 2 < t.length) noter(x + t[i+1] + t[i+2], -2);
+  for (const { texte, conf = 1 } of lignes) {
+    const propre = texte.normalize('NFKD').replace(/[^A-Za-z0-9 ]/g, ' ').trim();
+    if (!propre) continue;
+    const minus = /[a-z]/.test(propre);              // phrase du tag (« Do not keep me… »)
+    const mots = propre.split(/\s+/), seul = propre.replace(/\s/g, ''), bonus = 3 * conf;
+    // ligne isolée = cas typique du code gravé seul sur sa ligne
+    if (!minus) noter(seul, bonus + 4);
+    else if (/^[A-Za-z0-9]{6}$/.test(seul) && (seul.match(/[a-z]/g) || []).length <= 1) noter(seul.toUpperCase(), bonus + 1);
+    if (mots.length > 1) mots.forEach((m, i) => {
+      if (/[a-z]/.test(m)) return;
+      noter(m, bonus - (minus ? 3 : 0));
+      if (i + 1 < mots.length && !/[a-z]/.test(mots[i + 1])) noter(m + mots[i + 1], bonus - 1 - (minus ? 3 : 0));
     });
   }
-  return [...sc.entries()].filter(([, s]) => s > 0).sort((a, b) => b[1] - a[1]).map(([c]) => c).slice(0, 5);
+  return [...sc.entries()].filter(([, s]) => s > 3).sort((a, b) => b[1] - a[1]).map(([c]) => c).slice(0, 5);
 }
 
-// ================= OCR =================
-let worker = null;
-async function initOCR() {
-  if (typeof Tesseract === 'undefined') throw new Error('moteur OCR non chargé (pas de réseau ?)');
-  $('statut').textContent = 'Chargement du moteur de lecture (1re fois ~10 Mo)…';
-  worker = await Tesseract.createWorker('eng', 1);
-  await worker.setParameters({ tessedit_char_whitelist:'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 ', tessedit_pageseg_mode:'6' });
+// ================= Moteur OCR : PaddleOCR PP-OCRv4 (détection + reconnaissance) via ONNX Runtime =================
+// Les modèles (~16 Mo) sont téléchargés une fois puis gardés dans le cache du navigateur (Cache API).
+const ORT_CDN = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.31.1/dist/';
+const MODELES = 'https://cdn.jsdelivr.net/npm/@gutenye/ocr-models@1.4.2/assets/';
+async function telecharger(url, texte) {
+  let rep = null, cache = null;
+  try { cache = await caches.open('tbModeles.v1'); rep = await cache.match(url); } catch {}
+  if (!rep) { rep = await fetch(url); if (!rep.ok) throw new Error('téléchargement impossible : ' + url.split('/').pop());
+    if (cache) try { await cache.put(url, rep.clone()); } catch {} }
+  return texte ? rep.text() : new Uint8Array(await rep.arrayBuffer());
 }
-async function ocr(canvas) { const { data } = await worker.recognize(canvas); return data.text || ''; }
+
+function creerMoteur(sDet, sRec, dico) {
+  const MOY = [0.485, 0.456, 0.406], ECT = [0.229, 0.224, 0.225];
+  // image RGBA → tenseur de détection (côtés multiples de 32)
+  function entreeDet(px, w, h, cote) {
+    const r = Math.min(1, cote / Math.max(w, h));
+    const W = Math.max(32, Math.round(w * r / 32) * 32), H = Math.max(32, Math.round(h * r / 32) * 32);
+    const t = new Float32Array(3 * W * H), sx = w / W, sy = h / H;
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      const i = (Math.min(h - 1, (y + .5) * sy | 0) * w + Math.min(w - 1, (x + .5) * sx | 0)) * 4;
+      for (let c = 0; c < 3; c++) t[c * W * H + y * W + x] = (px[i + c] / 255 - MOY[c]) / ECT[c];
+    }
+    return { t, W, H, sx, sy };
+  }
+  // carte de probabilité → rectangles orientés (composantes connexes + axe principal), agrandis façon PaddleOCR
+  function boites(prob, W, H, seuil = 0.3, seuilBoite = 0.5, agrandir = 1.6) {
+    const vu = new Uint8Array(W * H), res = [], pile = new Int32Array(W * H);
+    for (let d = 0; d < W * H; d++) {
+      if (vu[d] || prob[d] < seuil) continue;
+      let n = 0, sp = 0, sxx = 0, syy = 0, sxy = 0, mx = 0, my = 0, sc = 0;
+      const pts = []; pile[sp++] = d; vu[d] = 1;
+      while (sp) {
+        const q = pile[--sp], x = q % W, y = (q / W) | 0;
+        pts.push(x, y); n++; mx += x; my += y; sc += prob[q];
+        if (x > 0 && !vu[q - 1] && prob[q - 1] >= seuil) { vu[q - 1] = 1; pile[sp++] = q - 1; }
+        if (x < W - 1 && !vu[q + 1] && prob[q + 1] >= seuil) { vu[q + 1] = 1; pile[sp++] = q + 1; }
+        if (y > 0 && !vu[q - W] && prob[q - W] >= seuil) { vu[q - W] = 1; pile[sp++] = q - W; }
+        if (y < H - 1 && !vu[q + W] && prob[q + W] >= seuil) { vu[q + W] = 1; pile[sp++] = q + W; }
+      }
+      if (n < 12 || sc / n < seuilBoite) continue;
+      mx /= n; my /= n;
+      for (let k = 0; k < pts.length; k += 2) { const a = pts[k] - mx, b = pts[k + 1] - my; sxx += a * a; syy += b * b; sxy += a * b; }
+      const ang = 0.5 * Math.atan2(2 * sxy, sxx - syy), ux = Math.cos(ang), uy = Math.sin(ang);
+      let a0 = 1e9, a1 = -1e9, b0 = 1e9, b1 = -1e9;
+      for (let k = 0; k < pts.length; k += 2) {
+        const a = (pts[k] - mx) * ux + (pts[k + 1] - my) * uy, b = -(pts[k] - mx) * uy + (pts[k + 1] - my) * ux;
+        if (a < a0) a0 = a; if (a > a1) a1 = a; if (b < b0) b0 = b; if (b > b1) b1 = b;
+      }
+      let L = a1 - a0 + 1, E = b1 - b0 + 1;
+      if (Math.min(L, E) < 3) continue;
+      const dist = (L * E * agrandir) / (2 * (L + E)); L += 2 * dist; E += 2 * dist;
+      const ca = (a0 + a1) / 2, cb = (b0 + b1) / 2;
+      res.push({ cx: mx + ca * ux - cb * uy, cy: my + ca * uy + cb * ux, L, E, ux, uy });
+    }
+    return res;
+  }
+  // découpe la ligne (rectangle orienté) redressée en 48 px de haut
+  function entreeRec(px, w, h, b, sx, sy, retourne) {
+    let { cx, cy, L, E, ux, uy } = b;
+    cx *= sx; cy *= sy; L *= sx; E *= sy;
+    if (E > L * 1.5) { [L, E] = [E, L]; [ux, uy] = [-uy, ux]; }   // ligne verticale
+    if (ux < 0) { ux = -ux; uy = -uy; }                           // lecture de gauche à droite
+    if (retourne) { ux = -ux; uy = -uy; }                         // essai à l'envers
+    const vx = -uy, vy = ux, HH = 48, WW = Math.max(16, Math.min(1600, Math.round(HH * L / E)));
+    const t = new Float32Array(3 * HH * WW);
+    for (let j = 0; j < HH; j++) for (let i = 0; i < WW; i++) {
+      const a = (i + .5) / WW * L - L / 2, c = (j + .5) / HH * E - E / 2;
+      const X = cx + a * ux + c * vx, Y = cy + a * uy + c * vy;
+      const x0 = Math.max(0, Math.min(w - 2, X | 0)), y0 = Math.max(0, Math.min(h - 2, Y | 0)), fx = X - x0, fy = Y - y0;
+      const i00 = (y0 * w + x0) * 4, i10 = i00 + 4, i01 = i00 + w * 4, i11 = i01 + 4;
+      for (let k = 0; k < 3; k++) {
+        const v = (px[i00 + k] * (1 - fx) + px[i10 + k] * fx) * (1 - fy) + (px[i01 + k] * (1 - fx) + px[i11 + k] * fx) * fy;
+        t[k * HH * WW + j * WW + i] = (v / 255 - 0.5) / 0.5;
+      }
+    }
+    return new ort.Tensor('float32', t, [1, 3, HH, WW]);
+  }
+  // décodage CTC glouton → texte + confiance moyenne
+  function decoder(out) {
+    const [, T, C] = out.dims, d = out.data; let s = '', conf = 0, n = 0, prec = 0;
+    for (let t = 0; t < T; t++) {
+      let m = 0, im = 0; for (let c = 0; c < C; c++) if (d[t * C + c] > m) { m = d[t * C + c]; im = c; }
+      if (im && im !== prec) { s += dico[im - 1] ?? ''; conf += m; n++; }
+      prec = im;
+    }
+    return { texte: s, conf: n ? conf / n : 0 };
+  }
+  const rec = async t => decoder((await sRec.run({ [sRec.inputNames[0]]: t }))[sRec.outputNames[0]]);
+  // lit tout le texte d'une image (ImageData) → [{ texte, conf }]
+  return async function lire(img, cote = 1280) {
+    const { data: px, width: w, height: h } = img, e = entreeDet(px, w, h, cote);
+    const od = await sDet.run({ [sDet.inputNames[0]]: new ort.Tensor('float32', e.t, [1, 3, e.H, e.W]) });
+    const lignes = [];
+    for (const b of boites(od[sDet.outputNames[0]].data, e.W, e.H)) {
+      let r = await rec(entreeRec(px, w, h, b, e.sx, e.sy, false));
+      if (r.conf < 0.6) { const r2 = await rec(entreeRec(px, w, h, b, e.sx, e.sy, true)); if (r2.conf > r.conf) r = r2; }
+      if (r.texte) lignes.push(r);
+    }
+    return lignes;
+  };
+}
+
+let moteur = null, chargement = null, file = Promise.resolve();
+function initOCR() {
+  if (moteur) return Promise.resolve();
+  return chargement ??= (async () => {
+    if (typeof ort === 'undefined') throw new Error('moteur OCR non chargé (pas de réseau ?)');
+    ort.env.wasm.wasmPaths = ORT_CDN; ort.env.wasm.numThreads = 1;
+    const msg = t => { $('statut').textContent = t; if ($('revue').classList.contains('on')) $('rStatut').textContent = t; };
+    msg('Chargement du moteur de lecture (1re fois ~16 Mo)…');
+    const [det, recM, dico] = await Promise.all([telecharger(MODELES + 'ch_PP-OCRv4_det_infer.onnx'),
+      telecharger(MODELES + 'ch_PP-OCRv4_rec_infer.onnx'), telecharger(MODELES + 'ppocr_keys_v1.txt', true)]);
+    const opt = { executionProviders:['wasm'] };
+    const lignesDico = dico.split(/\r?\n/); if (lignesDico.at(-1) === '') lignesDico.pop(); lignesDico.push(' ');
+    moteur = creerMoteur(await ort.InferenceSession.create(det, opt), await ort.InferenceSession.create(recM, opt), lignesDico);
+  })().catch(e => { chargement = null; throw e; });
+}
+// une seule lecture à la fois (les sessions ONNX ne supportent pas les appels simultanés)
+function ocr(img, cote) {
+  const p = file.then(async () => { await initOCR(); return moteur(img, cote); });
+  file = p.catch(() => {});
+  return p;
+}
 
 // ================= Scan en continu =================
 // État : on propose un code quand il est lu 2 fois de suite (stable), le champ reste modifiable.
 let enPause = false, fige = false, editionManuelle = false;
-let dernier = null, propose = null, tour = 0;
+let dernier = null, propose = null;
 
 function afficherProposition(liste, stable) {
   const ch = $('chips'); ch.innerHTML = '';
@@ -330,15 +460,11 @@ function reinitialiser(msg) {
 
 async function boucle() {
   while (true) {
-    const actif = worker && flux && !enPause && !fige && !editionManuelle && !document.hidden
+    const actif = moteur && flux && !enPause && !fige && !editionManuelle && !document.hidden
                   && !$('panneau').classList.contains('on') && !$('revue').classList.contains('on') && video.videoWidth;
     if (!actif) { await new Promise(r => setTimeout(r, 300)); continue; }
     try {
-      tour++;
-      const z = zoneVideo();
-      // on alterne image normale / négatif tant que rien n'est trouvé
-      const inverser = !propose && tour % 2 === 0;
-      const liste = candidats(await ocr(preparer(video, z, inverser)));
+      const liste = candidats(await ocr(preparer(video, zoneVideo(), 960), 960));
       if (fige || editionManuelle) continue;        // l'utilisateur a repris la main pendant la lecture
       if (liste.length) {
         const stable = liste[0] === dernier || liste[0] === propose;
@@ -354,7 +480,7 @@ async function boucle() {
 
 // ================= Capture (optionnelle) : fige l'image et lit à fond =================
 async function capturer() {
-  if (!worker || !video.videoWidth) return;
+  if (!moteur || !video.videoWidth) return;
   if (fige) { degeler(); return; }
   fige = true; $('capture').classList.add('gele');
   const z = zoneVideo(), g = $('gel');
@@ -362,8 +488,7 @@ async function capturer() {
   g.getContext('2d').drawImage(video, 0, 0); g.style.display = 'block';
   $('statut').textContent = 'Lecture de la capture…';
   try {
-    let texte = await ocr(preparer(g, z, false)), liste = candidats(texte);
-    if (!liste.length) { texte = await ocr(preparer(g, z, true)); liste = candidats(texte); }
+    const liste = candidats(await ocr(preparer(g, z, 1600), 960));
     if (liste.length) afficherProposition(liste, true);
     else $('statut').textContent = 'Rien trouvé sur la capture : saisis le code ou retouche ⏺ pour reprendre';
   } catch (e) { $('statut').textContent = '⚠️ ' + (e.message || e); }
@@ -430,16 +555,8 @@ async function dateExif(file) {
   return null;
 }
 
-let photos = [], iPhoto = 0, workerG = null, modeCadre = false, rCadre = null, rImage = null;
+let photos = [], iPhoto = 0, modeCadre = false, rCadre = null, rImage = null;
 const lectures = new Map();   // index -> Promise<liste de codes> (cache, et pré-lecture de la suivante)
-
-async function getWorkerG() {      // worker dédié à la galerie (image entière, texte épars)
-  if (workerG) return workerG;
-  if (typeof Tesseract === 'undefined') throw new Error('moteur OCR non chargé (pas de réseau ?)');
-  workerG = await Tesseract.createWorker('eng', 1);
-  await workerG.setParameters({ tessedit_char_whitelist:'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 ', tessedit_pageseg_mode:'11' });
-  return workerG;
-}
 async function chargerImage(i) {
   const p = photos[i];
   if (!p.img) { p.img = new Image(); p.img.src = URL.createObjectURL(p.file); await p.img.decode(); }
@@ -447,12 +564,9 @@ async function chargerImage(i) {
 }
 function lirePhoto(i) {
   if (!lectures.has(i)) lectures.set(i, (async () => {
-    const im = await chargerImage(i), w = await getWorkerG();
-    const zone = { x:0, y:0, w:im.naturalWidth, h:im.naturalHeight };
-    let { data } = await w.recognize(preparer(im, zone, false, 2000));
-    let liste = candidats(data.text || '');
-    if (!liste.length) { ({ data } = await w.recognize(preparer(im, zone, true, 2000))); liste = candidats(data.text || ''); }
-    return liste;
+    const im = await chargerImage(i);
+    // image entière : détection à 960 px, découpe des lignes dans une version à 1600 px
+    return candidats(await ocr(preparer(im, { x:0, y:0, w:im.naturalWidth, h:im.naturalHeight }, 1600), 960));
   })().catch(e => { lectures.delete(i); throw e; }));
   return lectures.get(i);
 }
@@ -503,7 +617,7 @@ async function afficherPhoto() {
   $('rPrec').disabled = i === 0; $('rSuiv').disabled = i === photos.length - 1;
   $('rCode').value = ''; $('rChips').innerHTML = ''; $('rValider').disabled = true;
   rImage = await chargerImage(i); if (i !== iPhoto) return; dessinerRevue();
-  $('rStatut').textContent = lectures.has(i) ? 'Lecture…' : (workerG ? 'Lecture…' : 'Chargement du moteur de lecture…');
+  $('rStatut').textContent = moteur ? 'Lecture…' : 'Chargement du moteur de lecture (1re fois ~16 Mo)…';
   try {
     const liste = await lirePhoto(i);
     if (i !== iPhoto) return;                // l'utilisateur a déjà changé de photo
@@ -545,13 +659,10 @@ $('rCode').addEventListener('keydown', e => { if (e.key === 'Enter') $('rValider
       return;
     }
     if (!rCadre || rCadre.w < 20 || rCadre.h < 10) { rCadre = null; dessinerRevue(); return; }
-    // relecture de la zone cadrée (worker principal, mode bloc de texte)
+    // relecture de la zone cadrée, agrandie
     $('rStatut').textContent = 'Lecture de la zone…';
     try {
-      if (!worker) await initOCR();
-      let liste = candidats(await ocr(preparer(rImage, rCadre, false)));
-      if (!liste.length) liste = candidats(await ocr(preparer(rImage, rCadre, true)));
-      proposerRevue(liste);
+      proposerRevue(candidats(await ocr(preparer(rImage, rCadre, 1280), 1280)));
     } catch (err) { $('rStatut').textContent = '⚠️ ' + (err.message || err); }
   });
 })();
@@ -604,8 +715,8 @@ $('partager').onclick = async () => {
   if (!codes.length) return toast('Liste vide', true);
   const f = new File([texteExport()], nomFichier(), { type:'text/plain' });
   try {
-    if (navigator.canShare && navigator.canShare({ files:[f] })) await navigator.share({ files:[f], title:'Codes TB' });
-    else if (navigator.share) await navigator.share({ title:'Codes TB', text:texteExport() });
+    if (navigator.canShare && navigator.canShare({ files:[f] })) await navigator.share({ files:[f], title:'TBScanner' });
+    else if (navigator.share) await navigator.share({ title:'TBScanner', text:texteExport() });
     else $('telecharger').click();
   } catch (e) { if (e.name !== 'AbortError') $('telecharger').click(); }
 };
