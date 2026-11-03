@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#000000">
+<meta name="theme-color" content="#1f5f3a">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <title>TBScanner</title>
@@ -31,28 +31,40 @@
   #viseur::after { content:'Place le code ici'; position:absolute; top:-26px; left:0; right:0; text-align:center; font-size:.85rem; opacity:.85; }
 
   /* ---- barre du haut ---- */
-  #haut { position:fixed; top:0; left:0; right:0; padding:calc(env(safe-area-inset-top) + 8px) 10px 8px; display:flex; gap:8px; align-items:center;
-          background:linear-gradient(rgba(0,0,0,.6),transparent); }
-  #haut h1 { font-size:1.05rem; margin:0; flex:1; }
-  .rond { width:44px; height:44px; border-radius:50%; background:rgba(0,0,0,.5); font-size:1.25rem; position:relative; }
+  /* barre de titre pleine largeur, opaque */
+  #haut { position:fixed; top:0; left:0; right:0; z-index:5; padding:calc(env(safe-area-inset-top) + 8px) 12px 8px; display:flex; gap:10px; align-items:center;
+          background:#1f5f3a; box-shadow:0 2px 8px rgba(0,0,0,.4); }
+  #haut h1 { font-size:1.15rem; margin:0; flex:1; }
+  .rond { width:44px; height:44px; border-radius:50%; background:rgba(255,255,255,.16); font-size:1.25rem; position:relative; }
   .rond.actif { background:var(--orange); }
   #badge { position:absolute; top:-4px; right:-4px; background:var(--vert); border-radius:10px; font-size:.75rem; padding:1px 6px; }
 
   /* ---- panneau du bas ---- */
-  #bas { position:fixed; left:0; right:0; bottom:0; padding:12px 14px calc(env(safe-area-inset-bottom) + 14px);
-         background:linear-gradient(transparent, rgba(0,0,0,.85) 25%); }
-  #statut { text-align:center; font-size:.85rem; opacity:.85; min-height:1.2em; margin-bottom:8px; }
-  #chips { display:flex; flex-wrap:wrap; justify-content:center; gap:6px; margin-bottom:8px; min-height:0; }
+  #bas { position:fixed; left:0; right:0; bottom:0; padding:10px 14px calc(env(safe-area-inset-bottom) + 12px);
+         background:linear-gradient(transparent, rgba(0,0,0,.88) 18%); }
+  #statut { text-align:center; font-size:.85rem; opacity:.85; min-height:1.2em; margin-bottom:6px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  #chips { display:flex; flex-wrap:nowrap; overflow:hidden; justify-content:center; gap:6px; margin-bottom:6px; min-height:34px; }
   .chip { background:rgba(255,255,255,.15); border:1px solid rgba(255,255,255,.4); border-radius:16px; padding:5px 10px; font-size:.95rem; }
-  .saisie { display:flex; gap:8px; align-items:stretch; }
-  #code { flex:1; min-width:0; font-size:1.6rem; text-align:center; text-transform:uppercase; padding:10px; border-radius:12px;
-          border:2px solid rgba(255,255,255,.3); background:rgba(0,0,0,.5); color:#fff; }
+  /* code proposé : grand, centré, sur toute la largeur */
+  #code { display:block; width:100%; font-size:2rem; text-align:center; text-transform:uppercase; padding:8px; border-radius:12px;
+          border:2px solid rgba(255,255,255,.3); background:rgba(0,0,0,.55); color:#fff; }
   #code.ok { border-color:var(--vertc); }
-  #valider { background:var(--vert); border-radius:12px; padding:0 22px; font-size:1.15rem; font-weight:600; }
-  #valider:disabled { background:#555; opacity:.7; }
-  .actions { display:flex; justify-content:space-between; align-items:center; margin-top:12px; }
-  .actions .petit { background:rgba(255,255,255,.12); border-radius:10px; padding:10px 12px; font-size:.9rem; }
-  #capture { width:64px; height:64px; border-radius:50%; background:#fff; border:5px solid rgba(255,255,255,.4); background-clip:padding-box; }
+  .actions { display:flex; justify-content:space-between; align-items:center; margin-top:10px; }
+  .actions .petit { background:rgba(255,255,255,.12); border-radius:10px; padding:10px 12px; font-size:.9rem; min-width:96px; }
+  .actions .petit.actif { background:var(--orange); }
+  #capture { width:56px; height:56px; border-radius:50%; background:#fff; border:5px solid rgba(255,255,255,.4); background-clip:padding-box; }
+  /* Valider (grand, en bas) + Récupéré 🎒 : un geste = une action */
+  .valrow { display:grid; grid-template-columns:1fr 72px; gap:8px; margin-top:10px; }
+  .valider { background:var(--vert); border-radius:14px; height:60px; font-size:1.3rem; font-weight:700; }
+  .recup { background:#a0522d; border-radius:14px; height:60px; font-size:1.7rem; }
+  .valider:disabled, .recup:disabled { background:#555; opacity:.6; }
+
+  /* ---- zoom : curseur vertical à droite ---- */
+  #zoom { position:fixed; right:4px; width:34px; display:none; flex-direction:column; align-items:center; gap:4px; z-index:4;
+          background:rgba(0,0,0,.35); border-radius:17px; padding:8px 0; font-size:1.1rem; }
+  #zoom.on { display:flex; }
+  #zoom input { writing-mode:vertical-lr; direction:rtl; flex:1; width:28px; margin:0; accent-color:var(--vertc); }
+  #zoomVal { font-size:.7rem; opacity:.85; }
   #capture.gele { background:var(--orange); }
 
   /* ---- liste ---- */
@@ -64,9 +76,14 @@
   #liste { flex:1; overflow:auto; padding:8px 14px; }
   .jour { font-weight:600; color:#1f5f3a; margin:14px 0 4px; text-transform:capitalize; }
   .item { display:flex; justify-content:space-between; align-items:center; background:#fff; border-radius:10px; padding:10px 12px; margin:6px 0; }
-  .item .mono { font-size:1.15rem; }
+  .item .mono { font-size:1.15rem; flex:1; }
   .item small { color:#888; margin-left:8px; letter-spacing:0; font-family:system-ui; }
   .item button { background:none; color:#b33; font-size:1.2rem; padding:4px 8px; }
+  .item button.sac { filter:grayscale(1); opacity:.35; }          /* 🎒 : toucher pour passer en « récupéré » */
+  .item button.sac.oui { filter:none; opacity:1; }
+  /* zone des TB récupérés, sous la même date */
+  .zoneRecup { background:#f6e3cf; border-left:4px solid #a0522d; border-radius:10px; padding:4px 8px 6px; margin:8px 0 4px; }
+  .zoneRecup .titreRecup { font-size:.85rem; font-weight:600; color:#7a3e1d; margin:4px 2px; }
   .vide { text-align:center; color:#888; padding:30px; }
   #export { display:grid; grid-template-columns:1fr 1fr; gap:8px; padding:12px 14px calc(env(safe-area-inset-bottom) + 12px); background:#fff; border-top:1px solid #ddd; }
   #export button { padding:13px; border-radius:10px; background:#2e8b57; color:#fff; }
@@ -105,8 +122,7 @@
   .rBtns button { flex:1; padding:14px; border-radius:12px; font-size:1.05rem; }
   .rBtns .nav { flex:0 0 auto; background:#333; padding:14px 16px; }
   .rBtns .nav.actif { background:var(--orange); }
-  #rValider { background:var(--vert); font-weight:600; flex:1; }
-  #rValider:disabled { background:#555; opacity:.7; }
+  .rBtns .nav.large { flex:1; }
 
   /* ---- divers ---- */
   #erreurCam { position:fixed; inset:0; display:none; flex-direction:column; align-items:center; justify-content:center; padding:30px; text-align:center; gap:14px; }
@@ -127,7 +143,6 @@
 
 <div id="haut">
   <h1>📷 TBScanner</h1>
-  <button class="rond" id="btnTorche" title="Lampe" style="display:none">🔦</button>
   <label class="rond" for="galerie" title="Photos de la galerie" style="display:flex;align-items:center;justify-content:center">🖼️</label>
   <input type="file" id="galerie" accept="image/*" multiple>
   <button class="rond" id="btnListe" title="Liste">📋<span id="badge">0</span></button>
@@ -136,15 +151,23 @@
 <div id="bas">
   <div id="statut">Démarrage…</div>
   <div id="chips"></div>
-  <div class="saisie">
-    <input id="code" class="mono" placeholder="------" autocomplete="off" autocapitalize="characters" spellcheck="false">
-    <button id="valider" disabled>✔ Valider</button>
-  </div>
+  <input id="code" class="mono" placeholder="------" autocomplete="off" autocapitalize="characters" spellcheck="false">
   <div class="actions">
     <button class="petit" id="btnEffacer">✕ Effacer</button>
     <button id="capture" title="Figer l'image (optionnel)"></button>
-    <button class="petit" id="btnPause">⏸ Pause</button>
+    <button class="petit" id="btnTorche" title="Lampe" style="visibility:hidden">🔦 Lampe</button>
   </div>
+  <div class="valrow">
+    <button id="valider" class="valider" disabled>✔ Valider</button>
+    <button id="recup" class="recup" disabled title="Récupéré : je l'emporte">🎒</button>
+  </div>
+</div>
+
+<div id="zoom">
+  <span>＋</span>
+  <input type="range" id="zoomCurseur" min="1" max="4" step="0.1" value="1" aria-label="Zoom">
+  <span>－</span>
+  <span id="zoomVal">×1</span>
 </div>
 
 <div id="erreurCam">
@@ -166,9 +189,12 @@
     </div>
     <div class="rBtns">
       <button id="rPrec" class="nav">◀</button>
-      <button id="rCadrer" class="nav">✂ Cadrer</button>
-      <button id="rValider" disabled>✔ Valider</button>
+      <button id="rCadrer" class="nav large">✂ Cadrer</button>
       <button id="rSuiv" class="nav">▶</button>
+    </div>
+    <div class="valrow">
+      <button id="rValider" class="valider" disabled>✔ Valider</button>
+      <button id="rRecup" class="recup" disabled title="Récupéré : je l'emporte">🎒</button>
     </div>
   </div>
 </section>
@@ -209,6 +235,12 @@
       <li>Fichiers servis par <b>jsDelivr</b></li>
       <li>Développé avec l'aide de <b>Claude</b> (Anthropic)</li>
     </ul>
+    <h3>Utilisation</h3>
+    <ul>
+      <li><b>✔ Valider</b> : TB découvert (vu, laissé sur place)</li>
+      <li><b>🎒</b> : TB récupéré (je l'emporte) — rangé à part dans la liste et l'export</li>
+      <li>Curseur à droite : zoom de la caméra</li>
+    </ul>
     <p class="note">Geocaching®, Travel Bug® et Trackable sont des marques de Groundspeak, Inc. TBScanner est une
        appli personnelle non officielle, sans lien avec Groundspeak.</p>
   </div>
@@ -218,7 +250,7 @@
 
 <script>
 const $ = id => document.getElementById(id);
-const VERSION_APP = '1.3.0', DATE_VERSION = '03/11/2026';   // à incrémenter à chaque publication
+const VERSION_APP = '1.4.0', DATE_VERSION = '03/11/2026';   // à incrémenter à chaque publication
 const CLE = 'tbCodes.v1';
 const video = $('video');
 
@@ -226,6 +258,15 @@ const video = $('video');
 let codes = (() => { try { return JSON.parse(localStorage.getItem(CLE)) || []; } catch { return []; } })();
 const sauver = () => { try { localStorage.setItem(CLE, JSON.stringify(codes)); } catch {} };
 const dejaVu = c => codes.some(x => x.code === c);
+const dejaRecup = c => codes.some(x => x.code === c && x.recup);
+// état des boutons Valider / 🎒 pour un code (prefixe '' = caméra, 'r' = galerie)
+function majBoutons(c, prefixe = '') {
+  const ok = c.length === LONGUEUR;
+  $(prefixe ? 'rValider' : 'valider').disabled = !ok || dejaVu(c);
+  $(prefixe ? 'rRecup' : 'recup').disabled = !ok || dejaRecup(c);   // un TB découvert peut encore passer en récupéré
+}
+const etatCode = c => dejaRecup(c) ? '🎒 ' + c + ' est déjà dans les récupérés'
+                    : dejaVu(c) ? '✔ ' + c + ' est déjà dans la liste (🎒 pour le passer en récupéré)' : '';
 
 function toast(msg, info) {
   const t = $('toast'); t.textContent = msg; t.className = info ? 'info on' : 'on';
@@ -241,18 +282,47 @@ function placerViseur() {
   const v = $('viseur'), W = innerWidth;
   if (W !== largRef) { largRef = W; hautRef = innerHeight; }        // rotation : nouvelle référence
   else hautRef = Math.max(hautRef, innerHeight);                    // clavier ouvert : on garde l'ancienne
-  const H = hautRef, w = Math.round(Math.min(W * 0.86, 560)), h = Math.round(w * 0.34);
-  const centre = Math.min(H * 0.46, H - 290 - h / 2);               // 290 px ≈ panneau du bas + marge
-  v.style.width = w + 'px'; v.style.height = h + 'px';
-  v.style.top = Math.round(Math.max(90, centre - h / 2)) + 'px';
+  const H = hautRef, w = Math.round(Math.min(W * 0.80, 540)), h = Math.round(w * 0.34);
+  const haut = $('haut').offsetHeight, bas = $('bas').offsetHeight;   // hauteurs fixes (chips réservées)
+  const centre = Math.min(H * 0.46, H - bas - 34 - h / 2);
+  const top = Math.round(Math.max(haut + 34, centre - h / 2));
+  v.style.width = w + 'px'; v.style.height = h + 'px'; v.style.top = top + 'px';
+  // curseur de zoom : à droite, centré sur le viseur
+  const z = $('zoom'), zh = Math.min(260, H - bas - haut - 40);
+  z.style.height = zh + 'px'; z.style.top = Math.round(Math.max(haut + 10, top + h / 2 - zh / 2)) + 'px';
 }
 addEventListener('resize', placerViseur);
 placerViseur();
 
+// ================= Zoom =================
+// Zoom matériel de la caméra si disponible (meilleure netteté), sinon zoom numérique (agrandissement de l'image).
+let zoomMat = null, zoomNum = 1, zoomEnCours = false;
+function initZoom(cap) {
+  const c = $('zoomCurseur');
+  zoomMat = cap && cap.zoom && cap.zoom.max > cap.zoom.min ? cap.zoom : null;
+  if (zoomMat) { c.min = zoomMat.min; c.max = Math.min(zoomMat.max, 10); c.step = zoomMat.step || 0.1; }
+  else { c.min = 1; c.max = 4; c.step = 0.1; }
+  c.value = Math.min(Math.max(zoomNum, +c.min), +c.max);
+  $('zoom').classList.add('on'); appliquerZoom();
+}
+async function appliquerZoom() {
+  const v = +$('zoomCurseur').value; $('zoomVal').textContent = '×' + (Math.round(v * 10) / 10);
+  zoomNum = v;
+  if (zoomMat) {
+    video.style.transform = $('gel').style.transform = '';
+    if (zoomEnCours || !piste) return; zoomEnCours = true;
+    try { await piste.applyConstraints({ advanced:[{ zoom:v }] }); } catch {}
+    zoomEnCours = false;
+    if (+$('zoomCurseur').value !== v) appliquerZoom();               // le curseur a encore bougé
+  } else video.style.transform = $('gel').style.transform = v > 1 ? `scale(${v})` : '';
+}
+$('zoomCurseur').addEventListener('input', appliquerZoom);
+const facteurZoomNum = () => zoomMat ? 1 : zoomNum;
+
 // Rectangle du viseur converti en coordonnées de la vidéo (object-fit: cover)
 function zoneVideo() {
   const vw = video.videoWidth, vh = video.videoHeight, ew = innerWidth, eh = innerHeight;
-  const s = Math.max(ew / vw, eh / vh), ox = (ew - vw * s) / 2, oy = (eh - vh * s) / 2;
+  const s = Math.max(ew / vw, eh / vh) * facteurZoomNum(), ox = (ew - vw * s) / 2, oy = (eh - vh * s) / 2;   // zoom numérique centré
   const r = $('viseur').getBoundingClientRect();
   const x = Math.max(0, (r.left - ox) / s), y = Math.max(0, (r.top - oy) / s);
   return { x, y, w: Math.min(vw - x, r.width / s), h: Math.min(vh - y, r.height / s) };
@@ -269,8 +339,9 @@ async function demarrerCamera() {
     try { // mise au point continue si dispo
       const cap = piste.getCapabilities ? piste.getCapabilities() : {};
       if (cap.focusMode && cap.focusMode.includes('continuous')) await piste.applyConstraints({ advanced:[{ focusMode:'continuous' }] });
-      if (cap.torch) $('btnTorche').style.display = '';
-    } catch {}
+      if (cap.torch) $('btnTorche').style.visibility = 'visible';
+      initZoom(cap);
+    } catch { initZoom(null); }
     $('erreurCam').style.display = 'none';
     return true;
   } catch (e) {
@@ -479,7 +550,7 @@ function ocr(img, cote) {
 
 // ================= Scan en continu =================
 // État : on propose un code quand il est lu 2 fois de suite (stable), le champ reste modifiable.
-let enPause = false, fige = false, editionManuelle = false;
+let fige = false, editionManuelle = false;
 let dernier = null, propose = null;
 
 function afficherProposition(liste, stable) {
@@ -495,21 +566,20 @@ function choisir(c, stable) {
   const deja = dejaVu(c);
   $('code').classList.toggle('ok', stable && !deja);
   $('viseur').className = stable ? 'ok' : 'vu';
-  $('valider').disabled = deja;
-  $('statut').textContent = deja ? '✔ ' + c + ' est déjà dans la liste — passe au TB suivant'
-                         : stable ? 'Code lu : vérifie puis Valider' : 'Code repéré, confirmation…';
+  majBoutons(c);
+  $('statut').textContent = etatCode(c) || (stable ? 'Code lu : vérifie puis ✔ Valider ou 🎒' : 'Code repéré, confirmation…');
   if (stable && !deja) vibrer(30);
 }
 function reinitialiser(msg) {
   propose = null; dernier = null; editionManuelle = false;
   $('code').value = ''; $('code').classList.remove('ok'); $('chips').innerHTML = '';
-  $('viseur').className = ''; $('valider').disabled = true;
+  $('viseur').className = ''; majBoutons('');
   $('statut').textContent = msg || 'Vise le code du TB…';
 }
 
 async function boucle() {
   while (true) {
-    const actif = moteur && flux && !enPause && !fige && !editionManuelle && !document.hidden
+    const actif = moteur && flux && !fige && !editionManuelle && !document.hidden
                   && !$('panneau').classList.contains('on') && !$('revue').classList.contains('on') && video.videoWidth;
     if (!actif) { await new Promise(r => setTimeout(r, 300)); continue; }
     try {
@@ -546,37 +616,41 @@ function degeler() { fige = false; $('capture').classList.remove('gele'); $('gel
 $('capture').onclick = capturer;
 
 // ================= Validation =================
-// Enregistre un code (date = maintenant, ou date de la photo pour la galerie)
-function enregistrer(c, date) {
-  if (dejaVu(c)) { toast(c + ' déjà enregistré', true); return false; }
-  codes.push({ code:c, date:(date || new Date()).toISOString() }); sauver(); majBadge();
-  vibrer([40, 60, 40]); toast('✔ ' + c);
+// Enregistre un code (date = maintenant, ou date de la photo pour la galerie) ; recup = TB récupéré (emporté)
+function enregistrer(c, date, recup = false) {
+  const ex = codes.find(x => x.code === c);
+  if (ex) {
+    if (recup && !ex.recup) { ex.recup = true; sauver(); vibrer([40, 60, 40]); toast('🎒 ' + c + ' → récupéré'); return true; }
+    toast(c + ' déjà enregistré', true); return false;
+  }
+  const d = (date || new Date()).toISOString();
+  codes.push(recup ? { code:c, date:d, recup:true } : { code:c, date:d });
+  sauver(); majBadge(); vibrer([40, 60, 40]); toast((recup ? '🎒 ' : '✔ ') + c);
   return true;
 }
 // Code de suivi = exactement 6 caractères : saisie nettoyée (majuscules, lettres/chiffres), limitée à 6
 const LONGUEUR = 6;
 const nettoyer = v => v.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, LONGUEUR);
 function nettoyerChamp(ch) { const c = nettoyer(ch.value); if (ch.value !== c) ch.value = c; return c; }
-function valider() {
+function valider(recup = false) {
   const c = nettoyer($('code').value);
   if (c.length !== LONGUEUR) { toast(`Il faut ${LONGUEUR} caractères`, true); return; }
-  if (!enregistrer(c)) { reinitialiser(); return; }
+  if (!enregistrer(c, null, recup)) { reinitialiser(); return; }
   $('code').blur(); degeler();
-  reinitialiser('Enregistré ! TB suivant…');
+  reinitialiser(recup ? 'Récupéré ! TB suivant…' : 'Enregistré ! TB suivant…');
 }
-$('valider').onclick = valider;
+$('valider').onclick = () => valider(false);
+$('recup').onclick = () => valider(true);
 $('btnEffacer').onclick = () => { $('code').blur(); degeler(); reinitialiser(); };
-$('btnPause').onclick = () => { enPause = !enPause; $('btnPause').textContent = enPause ? '▶ Reprendre' : '⏸ Pause';
-  if (enPause) $('statut').textContent = 'Lecture en pause'; else reinitialiser(); };
 
 // Saisie manuelle : on suspend la lecture auto tant que l'utilisateur édite
 const champ = $('code');
 champ.addEventListener('focus', () => { editionManuelle = true; });
 champ.addEventListener('input', () => {
   const c = nettoyerChamp(champ);
-  $('valider').disabled = c.length !== LONGUEUR || dejaVu(c); champ.classList.remove('ok');
-  $('statut').textContent = c && dejaVu(c) ? c + ' est déjà dans la liste'
-                          : c.length < LONGUEUR ? `Saisie manuelle : ${c.length}/${LONGUEUR} caractères` : 'Saisie manuelle : Valider';
+  majBoutons(c); champ.classList.remove('ok');
+  $('statut').textContent = (c.length === LONGUEUR && etatCode(c))
+                          || (c.length < LONGUEUR ? `Saisie manuelle : ${c.length}/${LONGUEUR} caractères` : 'Saisie manuelle : ✔ Valider ou 🎒');
 });
 champ.addEventListener('keydown', e => { if (e.key === 'Enter') valider(); });
 champ.addEventListener('blur', () => { if (!champ.value) editionManuelle = false; });
@@ -655,13 +729,12 @@ function proposerRevue(liste) {
     b.onclick = () => choisirRevue(c); ch.appendChild(b);
   });
   if (liste.length) choisirRevue(liste[0]);
-  else { $('rCode').value = ''; $('rValider').disabled = true;
+  else { $('rCode').value = ''; majBoutons('', 'r');
     $('rStatut').textContent = 'Pas de code trouvé : ▶ pour passer, ou ✂ Cadrer autour du code'; }
 }
 function choisirRevue(c) {
-  $('rCode').value = c;
-  const deja = dejaVu(c); $('rValider').disabled = deja;
-  $('rStatut').textContent = deja ? '✔ ' + c + ' est déjà dans la liste' : 'Code trouvé : vérifie puis Valider';
+  $('rCode').value = c; majBoutons(c, 'r');
+  $('rStatut').textContent = etatCode(c) || 'Code trouvé : vérifie puis ✔ Valider ou 🎒';
 }
 
 async function afficherPhoto() {
@@ -669,7 +742,7 @@ async function afficherPhoto() {
   rCadre = null; modeCadre = false; $('rCadrer').classList.remove('actif');
   $('rTitre').textContent = `Photo ${i + 1}/${photos.length} · ${p.date.toLocaleDateString('fr-FR')}`;
   $('rPrec').disabled = i === 0; $('rSuiv').disabled = i === photos.length - 1;
-  $('rCode').value = ''; $('rChips').innerHTML = ''; $('rValider').disabled = true;
+  $('rCode').value = ''; $('rChips').innerHTML = ''; majBoutons('', 'r');
   rImage = await chargerImage(i); if (i !== iPhoto) return; dessinerRevue();
   $('rStatut').textContent = moteur ? 'Lecture…' : 'Chargement du moteur de lecture (1re fois ~16 Mo)…';
   try {
@@ -684,18 +757,20 @@ $('rPrec').onclick = () => allerA(iPhoto - 1);
 $('rSuiv').onclick = () => allerA(iPhoto + 1);
 $('rFermer').onclick = () => { $('revue').classList.remove('on'); photos.forEach(p => p.img && URL.revokeObjectURL(p.img.src)); photos = []; lectures.clear(); reinitialiser(); };
 
-$('rValider').onclick = () => {
+function validerRevue(recup) {
   const c = nettoyer($('rCode').value);
   if (c.length !== LONGUEUR) return toast(`Il faut ${LONGUEUR} caractères`, true);
-  if (!enregistrer(c, photos[iPhoto].date)) return;
+  if (!enregistrer(c, photos[iPhoto].date, recup)) return;
   if (iPhoto + 1 < photos.length) allerA(iPhoto + 1);
-  else { $('rStatut').textContent = 'Dernière photo traitée ✔ — touche Terminer'; $('rValider').disabled = true; }
-};
+  else { $('rStatut').textContent = 'Dernière photo traitée ✔ — touche Terminer'; majBoutons(c, 'r'); }
+}
+$('rValider').onclick = () => validerRevue(false);
+$('rRecup').onclick = () => validerRevue(true);
 $('rCode').addEventListener('input', () => {
   const c = nettoyerChamp($('rCode'));
-  $('rValider').disabled = c.length !== LONGUEUR || dejaVu(c);
-  $('rStatut').textContent = c && dejaVu(c) ? '✔ ' + c + ' est déjà dans la liste'
-                           : c.length < LONGUEUR ? `${c.length}/${LONGUEUR} caractères` : 'Vérifie puis Valider';
+  majBoutons(c, 'r');
+  $('rStatut').textContent = (c.length === LONGUEUR && etatCode(c))
+                           || (c.length < LONGUEUR ? `${c.length}/${LONGUEUR} caractères` : 'Vérifie puis ✔ Valider ou 🎒');
 });
 $('rCode').addEventListener('keydown', e => { if (e.key === 'Enter') $('rValider').click(); });
 
@@ -738,24 +813,40 @@ function groupes() {
 function afficherListe() {
   const L = $('liste'); L.innerHTML = ''; majBadge();
   if (!codes.length) { L.innerHTML = '<div class="vide">Aucun code pour l\'instant</div>'; return; }
+  const ligne = (c, parent) => {
+    const it = document.createElement('div'); it.className = 'item';
+    const s = document.createElement('span'); s.className = 'mono'; s.textContent = c.code;
+    const t = document.createElement('small'); t.textContent = new Date(c.date).toLocaleTimeString('fr-FR', { hour:'2-digit', minute:'2-digit' });
+    s.appendChild(t);
+    const sac = document.createElement('button'); sac.textContent = '🎒'; sac.className = 'sac' + (c.recup ? ' oui' : '');
+    sac.title = c.recup ? 'Récupéré (toucher pour repasser en découvert)' : 'Découvert (toucher pour passer en récupéré)';
+    sac.onclick = () => { if (c.recup) delete c.recup; else c.recup = true; sauver(); afficherListe(); };
+    const b = document.createElement('button'); b.textContent = '✕';
+    b.onclick = () => { codes = codes.filter(x => x !== c); sauver(); afficherListe(); };
+    it.append(s, sac, b); parent.appendChild(it);
+  };
   for (const [jour, liste] of [...groupes()].reverse()) {
     const h = document.createElement('div'); h.className = 'jour'; h.textContent = `${jour} (${liste.length})`; L.appendChild(h);
-    liste.slice().reverse().forEach(c => {
-      const it = document.createElement('div'); it.className = 'item';
-      const s = document.createElement('span'); s.className = 'mono'; s.textContent = c.code;
-      const t = document.createElement('small'); t.textContent = new Date(c.date).toLocaleTimeString('fr-FR', { hour:'2-digit', minute:'2-digit' });
-      s.appendChild(t);
-      const b = document.createElement('button'); b.textContent = '✕';
-      b.onclick = () => { codes = codes.filter(x => x !== c); sauver(); afficherListe(); };
-      it.append(s, b); L.appendChild(it);
-    });
+    const recents = liste.slice().reverse(), recup = recents.filter(c => c.recup);
+    recents.filter(c => !c.recup).forEach(c => ligne(c, L));
+    if (recup.length) {                                // zone à part, sous la même date
+      const z = document.createElement('div'); z.className = 'zoneRecup';
+      const t = document.createElement('div'); t.className = 'titreRecup'; t.textContent = `🎒 Récupérés (${recup.length})`; z.appendChild(t);
+      recup.forEach(c => ligne(c, z)); L.appendChild(z);
+    }
   }
 }
 function texteExport() {
   let txt = '';
   // ordre inverse : jour le plus récent en haut, et dans chaque jour le dernier code lu en haut
-  for (const [jour, liste] of [...groupes()].reverse())
-    txt += `=== ${jour} (${liste.length} TB) ===\n` + liste.slice().reverse().map(c => c.code).join('\n') + '\n\n';
+  // découverts d'abord, puis les récupérés sous « --- Récupérés --- »
+  for (const [jour, liste] of [...groupes()].reverse()) {
+    const recents = liste.slice().reverse(), dec = recents.filter(c => !c.recup), rec = recents.filter(c => c.recup);
+    txt += `=== ${jour} (${liste.length} TB) ===\n`;
+    if (dec.length) txt += dec.map(c => c.code).join('\n') + '\n';
+    if (rec.length) txt += `--- Récupérés (${rec.length}) ---\n` + rec.map(c => c.code).join('\n') + '\n';
+    txt += '\n';
+  }
   return txt;
 }
 const nomFichier = () => 'codes_TB_' + new Date().toISOString().slice(0, 10) + '.txt';
