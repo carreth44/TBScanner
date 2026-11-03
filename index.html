@@ -1,0 +1,634 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#000000">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<title>Codes TB</title>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+<style>
+  :root { --vert:#2e8b57; --vertc:#3ddc84; --orange:#f0a020; }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html, body { margin:0; height:100%; background:#000; color:#fff; font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif; overflow:hidden; }
+  button { font:inherit; border:0; cursor:pointer; color:inherit; }
+  .mono { font-family:ui-monospace,Menlo,Consolas,monospace; letter-spacing:2px; }
+
+  /* ---- caméra ---- */
+  #video { position:fixed; inset:0; width:100%; height:100%; object-fit:cover; }
+  #gel { position:fixed; inset:0; width:100%; height:100%; object-fit:cover; display:none; }
+  #masque { position:fixed; inset:0; pointer-events:none; }
+  #viseur { position:fixed; left:50%; transform:translateX(-50%); border:3px solid rgba(255,255,255,.9); border-radius:12px;
+            box-shadow:0 0 0 100vmax rgba(0,0,0,.45); pointer-events:none; transition:border-color .2s, width .2s, height .2s; }
+  #viseur.vu { border-color:var(--orange); }
+  #viseur.ok { border-color:var(--vertc); }
+  #viseur::after { content:'Place le code ici'; position:absolute; top:-26px; left:0; right:0; text-align:center; font-size:.85rem; opacity:.85; }
+
+  /* ---- barre du haut ---- */
+  #haut { position:fixed; top:0; left:0; right:0; padding:calc(env(safe-area-inset-top) + 8px) 10px 8px; display:flex; gap:8px; align-items:center;
+          background:linear-gradient(rgba(0,0,0,.6),transparent); }
+  #haut h1 { font-size:1.05rem; margin:0; flex:1; }
+  .rond { width:44px; height:44px; border-radius:50%; background:rgba(0,0,0,.5); font-size:1.25rem; position:relative; }
+  .rond.actif { background:var(--orange); }
+  #badge { position:absolute; top:-4px; right:-4px; background:var(--vert); border-radius:10px; font-size:.75rem; padding:1px 6px; }
+
+  /* ---- panneau du bas ---- */
+  #bas { position:fixed; left:0; right:0; bottom:0; padding:12px 14px calc(env(safe-area-inset-bottom) + 14px);
+         background:linear-gradient(transparent, rgba(0,0,0,.85) 25%); }
+  #statut { text-align:center; font-size:.85rem; opacity:.85; min-height:1.2em; margin-bottom:8px; }
+  #chips { display:flex; flex-wrap:wrap; justify-content:center; gap:6px; margin-bottom:8px; min-height:0; }
+  .chip { background:rgba(255,255,255,.15); border:1px solid rgba(255,255,255,.4); border-radius:16px; padding:5px 10px; font-size:.95rem; }
+  .saisie { display:flex; gap:8px; align-items:stretch; }
+  #code { flex:1; min-width:0; font-size:1.6rem; text-align:center; text-transform:uppercase; padding:10px; border-radius:12px;
+          border:2px solid rgba(255,255,255,.3); background:rgba(0,0,0,.5); color:#fff; }
+  #code.ok { border-color:var(--vertc); }
+  #valider { background:var(--vert); border-radius:12px; padding:0 22px; font-size:1.15rem; font-weight:600; }
+  #valider:disabled { background:#555; opacity:.7; }
+  .actions { display:flex; justify-content:space-between; align-items:center; margin-top:12px; }
+  .actions .petit { background:rgba(255,255,255,.12); border-radius:10px; padding:10px 12px; font-size:.9rem; }
+  #capture { width:64px; height:64px; border-radius:50%; background:#fff; border:5px solid rgba(255,255,255,.4); background-clip:padding-box; }
+  #capture.gele { background:var(--orange); }
+
+  /* ---- liste ---- */
+  #panneau { position:fixed; inset:0; background:#f4f1ea; color:#222; display:none; flex-direction:column; z-index:10; }
+  #panneau.on { display:flex; }
+  #panneau header { background:#1f5f3a; color:#fff; padding:calc(env(safe-area-inset-top) + 12px) 14px 12px; display:flex; align-items:center; gap:10px; }
+  #panneau header h2 { flex:1; margin:0; font-size:1.1rem; }
+  #panneau header button { background:rgba(255,255,255,.2); border-radius:10px; padding:8px 12px; }
+  #liste { flex:1; overflow:auto; padding:8px 14px; }
+  .jour { font-weight:600; color:#1f5f3a; margin:14px 0 4px; text-transform:capitalize; }
+  .item { display:flex; justify-content:space-between; align-items:center; background:#fff; border-radius:10px; padding:10px 12px; margin:6px 0; }
+  .item .mono { font-size:1.15rem; }
+  .item small { color:#888; margin-left:8px; letter-spacing:0; font-family:system-ui; }
+  .item button { background:none; color:#b33; font-size:1.2rem; padding:4px 8px; }
+  .vide { text-align:center; color:#888; padding:30px; }
+  #export { display:grid; grid-template-columns:1fr 1fr; gap:8px; padding:12px 14px calc(env(safe-area-inset-bottom) + 12px); background:#fff; border-top:1px solid #ddd; }
+  #export button { padding:13px; border-radius:10px; background:#2e8b57; color:#fff; }
+  #export button.sec { background:#e3e0d8; color:#222; }
+  #export button.danger { background:#b33; }
+
+  /* ---- revue des photos de la galerie ---- */
+  #revue { position:fixed; inset:0; background:#111; display:none; flex-direction:column; z-index:15; }
+  #revue.on { display:flex; }
+  #revue header { padding:calc(env(safe-area-inset-top) + 10px) 14px 10px; display:flex; align-items:center; gap:10px; background:#1f5f3a; }
+  #revue header h2 { flex:1; margin:0; font-size:1.05rem; }
+  #revue header button { background:rgba(255,255,255,.2); border-radius:10px; padding:8px 12px; }
+  #rZone { flex:1; min-height:0; display:flex; align-items:center; justify-content:center; padding:8px; touch-action:none; }
+  #rImg { max-width:100%; max-height:100%; border-radius:8px; }
+  #rBas { padding:10px 14px calc(env(safe-area-inset-bottom) + 14px); background:#111; }
+  #rStatut { text-align:center; font-size:.85rem; opacity:.85; min-height:1.2em; margin-bottom:8px; }
+  #rChips { display:flex; flex-wrap:wrap; justify-content:center; gap:6px; margin-bottom:8px; }
+  #rCode { flex:1; min-width:0; font-size:1.5rem; text-align:center; text-transform:uppercase; padding:10px; border-radius:12px;
+           border:2px solid rgba(255,255,255,.3); background:#000; color:#fff; }
+  .rBtns { display:flex; gap:8px; margin-top:10px; }
+  .rBtns button { flex:1; padding:14px; border-radius:12px; font-size:1.05rem; }
+  .rBtns .nav { flex:0 0 auto; background:#333; padding:14px 16px; }
+  .rBtns .nav.actif { background:var(--orange); }
+  #rValider { background:var(--vert); font-weight:600; flex:1; }
+  #rValider:disabled { background:#555; opacity:.7; }
+
+  /* ---- divers ---- */
+  #erreurCam { position:fixed; inset:0; display:none; flex-direction:column; align-items:center; justify-content:center; padding:30px; text-align:center; gap:14px; }
+  #erreurCam label { background:var(--vert); padding:14px 18px; border-radius:12px; }
+  input[type=file] { display:none; }
+  #toast { position:fixed; top:40%; left:50%; transform:translate(-50%,-50%) scale(.9); background:rgba(46,139,87,.95); padding:14px 22px; border-radius:16px;
+           font-size:1.3rem; opacity:0; transition:all .25s; pointer-events:none; z-index:20; }
+  #toast.on { opacity:1; transform:translate(-50%,-50%) scale(1); }
+  #toast.info { background:rgba(50,50,50,.95); font-size:1rem; }
+</style>
+</head>
+<body>
+
+<video id="video" playsinline muted autoplay></video>
+<canvas id="gel"></canvas>
+<div id="viseur"></div>
+
+<div id="haut">
+  <h1>📷 Codes TB</h1>
+  <button class="rond" id="btnTorche" title="Lampe" style="display:none">🔦</button>
+  <label class="rond" for="galerie" title="Photos de la galerie" style="display:flex;align-items:center;justify-content:center">🖼️</label>
+  <input type="file" id="galerie" accept="image/*" multiple>
+  <button class="rond" id="btnCadre" title="Taille du cadre">⬚</button>
+  <button class="rond" id="btnListe" title="Liste">📋<span id="badge">0</span></button>
+</div>
+
+<div id="bas">
+  <div id="statut">Démarrage…</div>
+  <div id="chips"></div>
+  <div class="saisie">
+    <input id="code" class="mono" placeholder="------" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="10">
+    <button id="valider" disabled>✔ Valider</button>
+  </div>
+  <div class="actions">
+    <button class="petit" id="btnEffacer">✕ Effacer</button>
+    <button id="capture" title="Figer l'image (optionnel)"></button>
+    <button class="petit" id="btnPause">⏸ Pause</button>
+  </div>
+</div>
+
+<div id="erreurCam">
+  <p id="erreurMsg">Impossible d'accéder à la caméra.</p>
+  <label for="galerie">🖼️ Choisir des photos dans la galerie</label>
+</div>
+
+<section id="revue">
+  <header>
+    <h2 id="rTitre">Photo 1/1</h2>
+    <button id="rFermer">✕ Terminer</button>
+  </header>
+  <div id="rZone"><canvas id="rImg"></canvas></div>
+  <div id="rBas">
+    <div id="rStatut"></div>
+    <div id="rChips"></div>
+    <div style="display:flex">
+      <input id="rCode" class="mono" placeholder="------" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="10">
+    </div>
+    <div class="rBtns">
+      <button id="rPrec" class="nav">◀</button>
+      <button id="rCadrer" class="nav">✂ Cadrer</button>
+      <button id="rValider" disabled>✔ Valider</button>
+      <button id="rSuiv" class="nav">▶</button>
+    </div>
+  </div>
+</section>
+
+<section id="panneau">
+  <header>
+    <h2>Codes enregistrés (<span id="nb">0</span>)</h2>
+    <button id="fermer">✕ Fermer</button>
+  </header>
+  <div id="liste"></div>
+  <div id="export">
+    <button id="partager">📤 Partager .txt</button>
+    <button id="telecharger">💾 Télécharger</button>
+    <button class="sec" id="copier">📋 Copier</button>
+    <button class="danger" id="vider">🗑️ Tout effacer</button>
+  </div>
+</section>
+
+<div id="toast"></div>
+
+<script>
+const $ = id => document.getElementById(id);
+const CLE = 'tbCodes.v1';
+const video = $('video');
+
+// ================= Stockage =================
+let codes = (() => { try { return JSON.parse(localStorage.getItem(CLE)) || []; } catch { return []; } })();
+const sauver = () => { try { localStorage.setItem(CLE, JSON.stringify(codes)); } catch {} };
+const dejaVu = c => codes.some(x => x.code === c);
+
+function toast(msg, info) {
+  const t = $('toast'); t.textContent = msg; t.className = info ? 'info on' : 'on';
+  clearTimeout(t._h); t._h = setTimeout(() => t.className = info ? 'info' : '', 1300);
+}
+function vibrer(ms) { try { navigator.vibrate && navigator.vibrate(ms); } catch {} }
+
+// ================= Viseur =================
+const TAILLES = [ { w:.80, h:.14 }, { w:.85, h:.26 }, { w:.92, h:.42 } ];  // bandeau / moyen / grand
+let taille = +(localStorage.getItem('tbCadre') ?? 1) || 0;
+function placerViseur() {
+  const v = $('viseur'), W = innerWidth, H = innerHeight, t = TAILLES[taille];
+  v.style.width = Math.round(W * t.w) + 'px';
+  v.style.height = Math.round(Math.min(H * t.h, W * t.w * 0.7)) + 'px';
+  v.style.top = Math.round(H * 0.36 - v.offsetHeight / 2) + 'px';
+}
+$('btnCadre').onclick = () => { taille = (taille + 1) % TAILLES.length; try { localStorage.setItem('tbCadre', taille); } catch {} placerViseur(); };
+addEventListener('resize', placerViseur);
+placerViseur();
+
+// Rectangle du viseur converti en coordonnées de la vidéo (object-fit: cover)
+function zoneVideo() {
+  const vw = video.videoWidth, vh = video.videoHeight, ew = innerWidth, eh = innerHeight;
+  const s = Math.max(ew / vw, eh / vh), ox = (ew - vw * s) / 2, oy = (eh - vh * s) / 2;
+  const r = $('viseur').getBoundingClientRect();
+  const x = Math.max(0, (r.left - ox) / s), y = Math.max(0, (r.top - oy) / s);
+  return { x, y, w: Math.min(vw - x, r.width / s), h: Math.min(vh - y, r.height / s) };
+}
+
+// ================= Caméra =================
+let flux = null, piste = null, torche = false;
+async function demarrerCamera() {
+  try {
+    flux = await navigator.mediaDevices.getUserMedia({ audio:false,
+      video: { facingMode:{ ideal:'environment' }, width:{ ideal:1920 }, height:{ ideal:1080 } } });
+    video.srcObject = flux; await video.play();
+    piste = flux.getVideoTracks()[0];
+    try { // mise au point continue si dispo
+      const cap = piste.getCapabilities ? piste.getCapabilities() : {};
+      if (cap.focusMode && cap.focusMode.includes('continuous')) await piste.applyConstraints({ advanced:[{ focusMode:'continuous' }] });
+      if (cap.torch) $('btnTorche').style.display = '';
+    } catch {}
+    $('erreurCam').style.display = 'none';
+    return true;
+  } catch (e) {
+    console.error(e);
+    $('erreurMsg').textContent = 'Impossible d\'accéder à la caméra (' + (e.name || e) + '). Vérifie l\'autorisation dans le navigateur, ou utilise une photo.';
+    $('erreurCam').style.display = 'flex';
+    return false;
+  }
+}
+function arreterCamera() { if (flux) flux.getTracks().forEach(t => t.stop()); flux = null; piste = null; torche = false; $('btnTorche').classList.remove('actif'); }
+
+$('btnTorche').onclick = async () => {
+  if (!piste) return;
+  try { torche = !torche; await piste.applyConstraints({ advanced:[{ torch:torche }] }); $('btnTorche').classList.toggle('actif', torche); }
+  catch { torche = false; toast('Lampe indisponible', true); }
+};
+
+// Économie de batterie : on coupe la caméra quand l'appli passe en arrière-plan
+document.addEventListener('visibilitychange', async () => {
+  if (document.hidden) arreterCamera();
+  else if (!$('panneau').classList.contains('on')) { await demarrerCamera(); }
+});
+
+// ================= Prétraitement =================
+// source : vidéo ou image ; zone : rectangle source ; inverser : négatif (gravure claire sur fond sombre)
+function preparer(source, zone, inverser, largeur = 1200) {
+  const k = Math.min(3, largeur / zone.w);
+  const cv = document.createElement('canvas');
+  cv.width = Math.round(zone.w * k); cv.height = Math.round(zone.h * k);
+  const ctx = cv.getContext('2d', { willReadFrequently:true });
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(source, zone.x, zone.y, zone.w, zone.h, 0, 0, cv.width, cv.height);
+  const d = ctx.getImageData(0, 0, cv.width, cv.height), p = d.data;
+  const hist = new Uint32Array(256), g = new Uint8ClampedArray(p.length / 4);
+  for (let i = 0, j = 0; i < p.length; i += 4, j++) { const v = (p[i]*.299 + p[i+1]*.587 + p[i+2]*.114) | 0; g[j] = v; hist[v]++; }
+  let n = 0, lo = 0, hi = 255; const tot = g.length;
+  for (let v = 0; v < 256; v++) { n += hist[v]; if (n > tot * .02) { lo = v; break; } }
+  n = 0; for (let v = 255; v >= 0; v--) { n += hist[v]; if (n > tot * .02) { hi = v; break; } }
+  const e = 255 / Math.max(1, hi - lo);
+  for (let i = 0, j = 0; i < p.length; i += 4, j++) { let v = (g[j] - lo) * e; if (inverser) v = 255 - v; p[i] = p[i+1] = p[i+2] = v; }
+  ctx.putImageData(d, 0, 0);
+  return cv;
+}
+
+// ================= Extraction des codes =================
+const MOTS = new Set(['TRAVEL','GEOCACHING','GEOCACHE','TRACKABLE','GROUNDSPEAK','GEOCOIN','PLEASE','THANKS','MOVEME','TRACKING','NUMBER','REGISTER','LOGTHIS','VISITE','SEATTLE']);
+function candidats(texte) {
+  const sc = new Map();
+  const noter = (c, bonus) => {
+    if (c.length < 5 || c.length > 8 || MOTS.has(c)) return;
+    let s = bonus + (c.length === 6 ? 3 : 1);
+    if (/[A-Z]/.test(c) && /[0-9]/.test(c)) s += 2;
+    if (/^[0-9]+$/.test(c)) s -= 2;
+    if (/^TB[0-9A-Z]+$/.test(c)) s -= 3;
+    if (/^(.)\1+$/.test(c)) s -= 5;
+    sc.set(c, Math.max(sc.get(c) ?? -99, s));
+  };
+  for (const l of texte.toUpperCase().split(/\n/)) {
+    const t = l.replace(/[^A-Z0-9 ]/g, ' ').split(/\s+/).filter(Boolean);
+    t.forEach((x, i) => {
+      noter(x, 0);
+      if (i + 1 < t.length) noter(x + t[i+1], -1);
+      if (i + 2 < t.length) noter(x + t[i+1] + t[i+2], -2);
+    });
+  }
+  return [...sc.entries()].filter(([, s]) => s > 0).sort((a, b) => b[1] - a[1]).map(([c]) => c).slice(0, 5);
+}
+
+// ================= OCR =================
+let worker = null;
+async function initOCR() {
+  if (typeof Tesseract === 'undefined') throw new Error('moteur OCR non chargé (pas de réseau ?)');
+  $('statut').textContent = 'Chargement du moteur de lecture (1re fois ~10 Mo)…';
+  worker = await Tesseract.createWorker('eng', 1);
+  await worker.setParameters({ tessedit_char_whitelist:'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 ', tessedit_pageseg_mode:'6' });
+}
+async function ocr(canvas) { const { data } = await worker.recognize(canvas); return data.text || ''; }
+
+// ================= Scan en continu =================
+// État : on propose un code quand il est lu 2 fois de suite (stable), le champ reste modifiable.
+let enPause = false, fige = false, editionManuelle = false;
+let dernier = null, propose = null, tour = 0;
+
+function afficherProposition(liste, stable) {
+  const ch = $('chips'); ch.innerHTML = '';
+  if (liste.length > 1) liste.slice(0, 4).forEach(c => {
+    const b = document.createElement('button'); b.className = 'chip mono'; b.textContent = c;
+    b.onclick = () => { editionManuelle = true; choisir(c, true); }; ch.appendChild(b);
+  });
+  if (liste.length) choisir(liste[0], stable);
+}
+function choisir(c, stable) {
+  propose = c; $('code').value = c;
+  const deja = dejaVu(c);
+  $('code').classList.toggle('ok', stable && !deja);
+  $('viseur').className = stable ? 'ok' : 'vu';
+  $('valider').disabled = deja;
+  $('statut').textContent = deja ? '✔ ' + c + ' est déjà dans la liste — passe au TB suivant'
+                         : stable ? 'Code lu : vérifie puis Valider' : 'Code repéré, confirmation…';
+  if (stable && !deja) vibrer(30);
+}
+function reinitialiser(msg) {
+  propose = null; dernier = null; editionManuelle = false;
+  $('code').value = ''; $('code').classList.remove('ok'); $('chips').innerHTML = '';
+  $('viseur').className = ''; $('valider').disabled = true;
+  $('statut').textContent = msg || 'Vise le code du TB…';
+}
+
+async function boucle() {
+  while (true) {
+    const actif = worker && flux && !enPause && !fige && !editionManuelle && !document.hidden
+                  && !$('panneau').classList.contains('on') && !$('revue').classList.contains('on') && video.videoWidth;
+    if (!actif) { await new Promise(r => setTimeout(r, 300)); continue; }
+    try {
+      tour++;
+      const z = zoneVideo();
+      // on alterne image normale / négatif tant que rien n'est trouvé
+      const inverser = !propose && tour % 2 === 0;
+      const liste = candidats(await ocr(preparer(video, z, inverser)));
+      if (fige || editionManuelle) continue;        // l'utilisateur a repris la main pendant la lecture
+      if (liste.length) {
+        const stable = liste[0] === dernier || liste[0] === propose;
+        dernier = liste[0];
+        if (liste[0] !== propose || stable) afficherProposition(liste, stable);
+      } else if (!propose) {
+        $('statut').textContent = 'Vise le code du TB…' + (taille === 0 ? '' : ' (astuce : cadre serré = lecture plus fiable)');
+      }
+    } catch (e) { console.error(e); await new Promise(r => setTimeout(r, 500)); }
+    await new Promise(r => setTimeout(r, 150));
+  }
+}
+
+// ================= Capture (optionnelle) : fige l'image et lit à fond =================
+async function capturer() {
+  if (!worker || !video.videoWidth) return;
+  if (fige) { degeler(); return; }
+  fige = true; $('capture').classList.add('gele');
+  const z = zoneVideo(), g = $('gel');
+  g.width = video.videoWidth; g.height = video.videoHeight;
+  g.getContext('2d').drawImage(video, 0, 0); g.style.display = 'block';
+  $('statut').textContent = 'Lecture de la capture…';
+  try {
+    let texte = await ocr(preparer(g, z, false)), liste = candidats(texte);
+    if (!liste.length) { texte = await ocr(preparer(g, z, true)); liste = candidats(texte); }
+    if (liste.length) afficherProposition(liste, true);
+    else $('statut').textContent = 'Rien trouvé sur la capture : saisis le code ou retouche ⏺ pour reprendre';
+  } catch (e) { $('statut').textContent = '⚠️ ' + (e.message || e); }
+}
+function degeler() { fige = false; $('capture').classList.remove('gele'); $('gel').style.display = 'none'; }
+$('capture').onclick = capturer;
+
+// ================= Validation =================
+// Enregistre un code (date = maintenant, ou date de la photo pour la galerie)
+function enregistrer(c, date) {
+  if (dejaVu(c)) { toast(c + ' déjà enregistré', true); return false; }
+  codes.push({ code:c, date:(date || new Date()).toISOString() }); sauver(); majBadge();
+  vibrer([40, 60, 40]); toast('✔ ' + c);
+  return true;
+}
+function valider() {
+  const c = $('code').value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+  if (c.length < 4) { toast('Code trop court', true); return; }
+  if (!enregistrer(c)) { reinitialiser(); return; }
+  $('code').blur(); degeler();
+  reinitialiser('Enregistré ! TB suivant…');
+}
+$('valider').onclick = valider;
+$('btnEffacer').onclick = () => { $('code').blur(); degeler(); reinitialiser(); };
+$('btnPause').onclick = () => { enPause = !enPause; $('btnPause').textContent = enPause ? '▶ Reprendre' : '⏸ Pause';
+  if (enPause) $('statut').textContent = 'Lecture en pause'; else reinitialiser(); };
+
+// Saisie manuelle : on suspend la lecture auto tant que l'utilisateur édite
+const champ = $('code');
+champ.addEventListener('focus', () => { editionManuelle = true; });
+champ.addEventListener('input', () => {
+  const c = champ.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+  $('valider').disabled = c.length < 4; champ.classList.remove('ok');
+  $('statut').textContent = c && dejaVu(c) ? c + ' est déjà dans la liste' : 'Saisie manuelle';
+});
+champ.addEventListener('keydown', e => { if (e.key === 'Enter') valider(); });
+champ.addEventListener('blur', () => { if (!champ.value) editionManuelle = false; });
+
+// ================= Galerie : on fait défiler les photos, chacune est lue automatiquement =================
+// Date de prise de vue lue dans l'EXIF du JPEG (sinon date du fichier)
+async function dateExif(file) {
+  try {
+    const v = new DataView(await file.slice(0, 256 * 1024).arrayBuffer());
+    if (v.getUint16(0) !== 0xFFD8) return null;
+    let o = 2;
+    while (o < v.byteLength - 10) {
+      const m = v.getUint16(o), len = v.getUint16(o + 2);
+      if (m === 0xFFE1 && v.getUint32(o + 4) === 0x45786966) {
+        const t = o + 10, le = v.getUint16(t) === 0x4949;
+        const u16 = p => v.getUint16(p, le), u32 = p => v.getUint32(p, le);
+        const tag = (ifd, id) => { const n = u16(t + ifd); for (let i = 0; i < n; i++) { const e = t + ifd + 2 + i * 12; if (u16(e) === id) return e; } return null; };
+        const ifd0 = u32(t + 4), exif = tag(ifd0, 0x8769);
+        const e = (exif && tag(u32(exif + 8), 0x9003)) || tag(ifd0, 0x0132);
+        if (!e) return null;
+        const off = t + u32(e + 8); let s = '';
+        for (let i = 0; i < 19; i++) s += String.fromCharCode(v.getUint8(off + i));
+        const d = s.match(/(\d{4}):(\d\d):(\d\d) (\d\d):(\d\d):(\d\d)/);
+        return d ? new Date(+d[1], d[2] - 1, +d[3], +d[4], +d[5], +d[6]) : null;
+      }
+      if ((m & 0xFF00) !== 0xFF00) break;
+      o += 2 + len;
+    }
+  } catch {}
+  return null;
+}
+
+let photos = [], iPhoto = 0, workerG = null, modeCadre = false, rCadre = null, rImage = null;
+const lectures = new Map();   // index -> Promise<liste de codes> (cache, et pré-lecture de la suivante)
+
+async function getWorkerG() {      // worker dédié à la galerie (image entière, texte épars)
+  if (workerG) return workerG;
+  if (typeof Tesseract === 'undefined') throw new Error('moteur OCR non chargé (pas de réseau ?)');
+  workerG = await Tesseract.createWorker('eng', 1);
+  await workerG.setParameters({ tessedit_char_whitelist:'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 ', tessedit_pageseg_mode:'11' });
+  return workerG;
+}
+async function chargerImage(i) {
+  const p = photos[i];
+  if (!p.img) { p.img = new Image(); p.img.src = URL.createObjectURL(p.file); await p.img.decode(); }
+  return p.img;
+}
+function lirePhoto(i) {
+  if (!lectures.has(i)) lectures.set(i, (async () => {
+    const im = await chargerImage(i), w = await getWorkerG();
+    const zone = { x:0, y:0, w:im.naturalWidth, h:im.naturalHeight };
+    let { data } = await w.recognize(preparer(im, zone, false, 2000));
+    let liste = candidats(data.text || '');
+    if (!liste.length) { ({ data } = await w.recognize(preparer(im, zone, true, 2000))); liste = candidats(data.text || ''); }
+    return liste;
+  })().catch(e => { lectures.delete(i); throw e; }));
+  return lectures.get(i);
+}
+
+$('galerie').addEventListener('change', async e => {
+  const files = [...e.target.files]; e.target.value = '';
+  if (!files.length) return;
+  photos = [];
+  for (const f of files) photos.push({ file:f, date:(await dateExif(f)) || new Date(f.lastModified || Date.now()) });
+  photos.sort((a, b) => a.date - b.date);      // ordre chronologique
+  lectures.clear(); iPhoto = 0;
+  $('revue').classList.add('on'); $('erreurCam').style.display = 'none';
+  afficherPhoto();
+});
+
+function dessinerRevue() {
+  const cv = $('rImg'), im = rImage; if (!im) return;
+  const r = Math.min(1, 1400 / Math.max(im.naturalWidth, im.naturalHeight));
+  cv.width = Math.round(im.naturalWidth * r); cv.height = Math.round(im.naturalHeight * r);
+  const ctx = cv.getContext('2d'); ctx.drawImage(im, 0, 0, cv.width, cv.height);
+  if (rCadre) {
+    const s = r; ctx.fillStyle = 'rgba(0,0,0,.5)'; ctx.fillRect(0, 0, cv.width, cv.height);
+    ctx.drawImage(im, rCadre.x, rCadre.y, rCadre.w, rCadre.h, rCadre.x*s, rCadre.y*s, rCadre.w*s, rCadre.h*s);
+    ctx.strokeStyle = '#3ddc84'; ctx.lineWidth = 3; ctx.strokeRect(rCadre.x*s, rCadre.y*s, rCadre.w*s, rCadre.h*s);
+  }
+}
+
+function proposerRevue(liste) {
+  const ch = $('rChips'); ch.innerHTML = '';
+  if (liste.length > 1) liste.slice(0, 4).forEach(c => {
+    const b = document.createElement('button'); b.className = 'chip mono'; b.textContent = c;
+    b.onclick = () => choisirRevue(c); ch.appendChild(b);
+  });
+  if (liste.length) choisirRevue(liste[0]);
+  else { $('rCode').value = ''; $('rValider').disabled = true;
+    $('rStatut').textContent = 'Pas de code trouvé : ▶ pour passer, ou ✂ Cadrer autour du code'; }
+}
+function choisirRevue(c) {
+  $('rCode').value = c;
+  const deja = dejaVu(c); $('rValider').disabled = deja;
+  $('rStatut').textContent = deja ? '✔ ' + c + ' est déjà dans la liste' : 'Code trouvé : vérifie puis Valider';
+}
+
+async function afficherPhoto() {
+  const i = iPhoto, p = photos[i];
+  rCadre = null; modeCadre = false; $('rCadrer').classList.remove('actif');
+  $('rTitre').textContent = `Photo ${i + 1}/${photos.length} · ${p.date.toLocaleDateString('fr-FR')}`;
+  $('rPrec').disabled = i === 0; $('rSuiv').disabled = i === photos.length - 1;
+  $('rCode').value = ''; $('rChips').innerHTML = ''; $('rValider').disabled = true;
+  rImage = await chargerImage(i); if (i !== iPhoto) return; dessinerRevue();
+  $('rStatut').textContent = lectures.has(i) ? 'Lecture…' : (workerG ? 'Lecture…' : 'Chargement du moteur de lecture…');
+  try {
+    const liste = await lirePhoto(i);
+    if (i !== iPhoto) return;                // l'utilisateur a déjà changé de photo
+    proposerRevue(liste);
+    if (i + 1 < photos.length) lirePhoto(i + 1).catch(() => {});   // pré-lecture de la suivante
+  } catch (e) { if (i === iPhoto) $('rStatut').textContent = '⚠️ ' + (e.message || e) + ' — saisie manuelle possible'; }
+}
+function allerA(i) { if (i < 0 || i >= photos.length) return; iPhoto = i; afficherPhoto(); }
+$('rPrec').onclick = () => allerA(iPhoto - 1);
+$('rSuiv').onclick = () => allerA(iPhoto + 1);
+$('rFermer').onclick = () => { $('revue').classList.remove('on'); photos.forEach(p => p.img && URL.revokeObjectURL(p.img.src)); photos = []; lectures.clear(); reinitialiser(); };
+
+$('rValider').onclick = () => {
+  const c = $('rCode').value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+  if (c.length < 4) return toast('Code trop court', true);
+  if (!enregistrer(c, photos[iPhoto].date)) return;
+  if (iPhoto + 1 < photos.length) allerA(iPhoto + 1);
+  else { $('rStatut').textContent = 'Dernière photo traitée ✔ — touche Terminer'; $('rValider').disabled = true; }
+};
+$('rCode').addEventListener('input', () => {
+  const c = $('rCode').value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+  $('rValider').disabled = c.length < 4 || dejaVu(c);
+});
+$('rCode').addEventListener('keydown', e => { if (e.key === 'Enter') $('rValider').click(); });
+
+// Balayage gauche/droite pour changer de photo ; en mode Cadrer, le doigt trace un cadre à relire
+(function gestes() {
+  const cv = $('rImg'); let dep = null;
+  const pos = e => { const r = cv.getBoundingClientRect(), k = rImage.naturalWidth / r.width;
+    return { x:Math.max(0, Math.min(rImage.naturalWidth, (e.clientX - r.left) * k)), y:Math.max(0, Math.min(rImage.naturalHeight, (e.clientY - r.top) * k)), cx:e.clientX, cy:e.clientY }; };
+  $('rZone').addEventListener('pointerdown', e => { if (!rImage) return; dep = pos(e); if (modeCadre) $('rZone').setPointerCapture(e.pointerId); });
+  $('rZone').addEventListener('pointermove', e => { if (!dep || !modeCadre) return; const p = pos(e);
+    rCadre = { x:Math.min(dep.x, p.x), y:Math.min(dep.y, p.y), w:Math.abs(p.x - dep.x), h:Math.abs(p.y - dep.y) }; dessinerRevue(); });
+  $('rZone').addEventListener('pointerup', async e => {
+    if (!dep) return; const p = pos(e), d0 = dep; dep = null;
+    if (!modeCadre) {                         // balayage
+      const dx = p.cx - d0.cx;
+      if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(p.cy - d0.cy)) allerA(iPhoto + (dx < 0 ? 1 : -1));
+      return;
+    }
+    if (!rCadre || rCadre.w < 20 || rCadre.h < 10) { rCadre = null; dessinerRevue(); return; }
+    // relecture de la zone cadrée (worker principal, mode bloc de texte)
+    $('rStatut').textContent = 'Lecture de la zone…';
+    try {
+      if (!worker) await initOCR();
+      let liste = candidats(await ocr(preparer(rImage, rCadre, false)));
+      if (!liste.length) liste = candidats(await ocr(preparer(rImage, rCadre, true)));
+      proposerRevue(liste);
+    } catch (err) { $('rStatut').textContent = '⚠️ ' + (err.message || err); }
+  });
+})();
+$('rCadrer').onclick = () => { modeCadre = !modeCadre; $('rCadrer').classList.toggle('actif', modeCadre);
+  if (modeCadre) $('rStatut').textContent = 'Trace un cadre du doigt autour du code'; else { rCadre = null; dessinerRevue(); } };
+
+// ================= Liste & export =================
+function majBadge() { $('badge').textContent = codes.length; $('nb').textContent = codes.length; }
+function libJour(iso) { return new Date(iso).toLocaleDateString('fr-FR', { weekday:'long', day:'2-digit', month:'2-digit', year:'numeric' }); }
+function groupes() {
+  const m = new Map();
+  codes.slice().sort((a, b) => a.date.localeCompare(b.date)).forEach(c => {
+    const j = libJour(c.date); if (!m.has(j)) m.set(j, []); m.get(j).push(c);
+  });
+  return m;
+}
+function afficherListe() {
+  const L = $('liste'); L.innerHTML = ''; majBadge();
+  if (!codes.length) { L.innerHTML = '<div class="vide">Aucun code pour l\'instant</div>'; return; }
+  for (const [jour, liste] of [...groupes()].reverse()) {
+    const h = document.createElement('div'); h.className = 'jour'; h.textContent = `${jour} (${liste.length})`; L.appendChild(h);
+    liste.slice().reverse().forEach(c => {
+      const it = document.createElement('div'); it.className = 'item';
+      const s = document.createElement('span'); s.className = 'mono'; s.textContent = c.code;
+      const t = document.createElement('small'); t.textContent = new Date(c.date).toLocaleTimeString('fr-FR', { hour:'2-digit', minute:'2-digit' });
+      s.appendChild(t);
+      const b = document.createElement('button'); b.textContent = '✕';
+      b.onclick = () => { codes = codes.filter(x => x !== c); sauver(); afficherListe(); };
+      it.append(s, b); L.appendChild(it);
+    });
+  }
+}
+function texteExport() {
+  let txt = '';
+  for (const [jour, liste] of groupes()) txt += `=== ${jour} (${liste.length} TB) ===\n` + liste.map(c => c.code).join('\n') + '\n\n';
+  return txt;
+}
+const nomFichier = () => 'codes_TB_' + new Date().toISOString().slice(0, 10) + '.txt';
+
+$('btnListe').onclick = () => { afficherListe(); $('panneau').classList.add('on'); };
+$('fermer').onclick = () => { $('panneau').classList.remove('on'); if (!flux) demarrerCamera(); };
+
+$('telecharger').onclick = () => {
+  if (!codes.length) return toast('Liste vide', true);
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([texteExport()], { type:'text/plain' }));
+  a.download = nomFichier(); document.body.appendChild(a); a.click(); a.remove();
+};
+$('partager').onclick = async () => {
+  if (!codes.length) return toast('Liste vide', true);
+  const f = new File([texteExport()], nomFichier(), { type:'text/plain' });
+  try {
+    if (navigator.canShare && navigator.canShare({ files:[f] })) await navigator.share({ files:[f], title:'Codes TB' });
+    else if (navigator.share) await navigator.share({ title:'Codes TB', text:texteExport() });
+    else $('telecharger').click();
+  } catch (e) { if (e.name !== 'AbortError') $('telecharger').click(); }
+};
+$('copier').onclick = async () => {
+  if (!codes.length) return toast('Liste vide', true);
+  try { await navigator.clipboard.writeText(texteExport()); toast('Copié !', true); } catch { toast('Copie impossible', true); }
+};
+let confirmVider = false;
+$('vider').onclick = () => {
+  if (!codes.length) return;
+  if (!confirmVider) { confirmVider = true; $('vider').textContent = '⚠️ Confirmer ?';
+    setTimeout(() => { confirmVider = false; $('vider').textContent = '🗑️ Tout effacer'; }, 3000); return; }
+  codes = []; sauver(); afficherListe(); confirmVider = false; $('vider').textContent = '🗑️ Tout effacer';
+};
+
+// ================= Démarrage =================
+(async () => {
+  majBadge();
+  const camOk = await demarrerCamera();
+  try { await initOCR(); reinitialiser(camOk ? 'Vise le code du TB…' : ''); }
+  catch (e) { $('statut').textContent = '⚠️ ' + e.message + ' — saisie manuelle possible'; }
+  boucle();
+})();
+</script>
+</body>
+</html>

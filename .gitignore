@@ -1,0 +1,2 @@
+# Exports de codes de suivi (secrets) : ne jamais committer
+*.txt
