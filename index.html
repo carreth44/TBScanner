@@ -94,9 +94,10 @@
   #erreurCam { position:fixed; inset:0; display:none; flex-direction:column; align-items:center; justify-content:center; padding:30px; text-align:center; gap:14px; }
   #erreurCam label { background:var(--vert); padding:14px 18px; border-radius:12px; }
   input[type=file] { display:none; }
-  #toast { position:fixed; top:40%; left:50%; transform:translate(-50%,-50%) scale(.9); background:rgba(46,139,87,.95); padding:14px 22px; border-radius:16px;
-           font-size:1.3rem; opacity:0; transition:all .25s; pointer-events:none; z-index:20; }
-  #toast.on { opacity:1; transform:translate(-50%,-50%) scale(1); }
+  /* bandeau discret en haut (sous la barre de titre) : ne cache pas le code suivant */
+  #toast { position:fixed; top:calc(env(safe-area-inset-top) + 62px); left:50%; transform:translate(-50%,-8px); background:rgba(46,139,87,.95);
+           padding:7px 16px; border-radius:12px; font-size:1.05rem; opacity:0; transition:all .2s; pointer-events:none; z-index:20; white-space:nowrap; }
+  #toast.on { opacity:1; transform:translate(-50%,0); }
   #toast.info { background:rgba(50,50,50,.95); font-size:1rem; }
 </style>
 </head>
@@ -183,7 +184,7 @@ const dejaVu = c => codes.some(x => x.code === c);
 
 function toast(msg, info) {
   const t = $('toast'); t.textContent = msg; t.className = info ? 'info on' : 'on';
-  clearTimeout(t._h); t._h = setTimeout(() => t.className = info ? 'info' : '', 1300);
+  clearTimeout(t._h); t._h = setTimeout(() => t.className = info ? 'info' : '', 900);
 }
 function vibrer(ms) { try { navigator.vibrate && navigator.vibrate(ms); } catch {} }
 
@@ -275,9 +276,9 @@ function corriger(c) {
 function candidats(lignes) {
   const sc = new Map();
   const noter = (brut, s0) => {
-    if (brut.length < 5 || brut.length > 8 || MOTS.has(brut) || fragment(brut)) return;
+    if (brut.length !== 6 || MOTS.has(brut) || fragment(brut)) return;   // code de suivi = toujours 6 caractères
     const c = corriger(brut);
-    let s = s0 + (c.length === 6 ? 3 : -1);
+    let s = s0 + 3;
     if (/[A-Z]/.test(c) && /[0-9]/.test(brut)) s += 2;   // chiffre réellement lu (pas issu d'une correction)
     if (/^[0-9]+$/.test(c)) s -= 4;
     if (/^TB/.test(c)) s -= 3;                       // référence publique TBxxxx, pas le code de suivi
