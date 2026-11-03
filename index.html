@@ -57,7 +57,7 @@
   .valrow { display:grid; grid-template-columns:1fr 72px; gap:8px; margin-top:10px; }
   .valider { background:var(--vert); border-radius:14px; height:60px; font-size:1.3rem; font-weight:700; }
   .recup { background:#a0522d; border-radius:14px; height:60px; font-size:1.7rem; }
-  .recup.depot { background:#2b5d8a; }                            /* 📥 : le TB est dans le sac → déposer */
+  .recup.depot { background:#2b5d8a; }                            /* 🌲 : le TB est dans le sac → déposer */
   .valider:disabled, .recup:disabled { background:#555; opacity:.6; }
 
   /* ---- zoom : curseur vertical à droite ---- */
@@ -94,6 +94,7 @@
   .zoneDep .titreRecup { color:#1d4466; }
   .item button.dep { color:#2b5d8a; }
   .item button.annul { color:#666; font-size:1.05rem; }
+  .item button.bloque { color:#ccc; }                              /* ✕ impossible : le TB est dans le sac */
   .item button.confirmer { background:#b33; color:#fff; border-radius:8px; font-size:.85rem; }
 
   /* ---- fenêtre « où ? » (récupération / dépôt) ---- */
@@ -186,7 +187,7 @@
     <button class="petit" id="btnTorche" title="Lampe" style="visibility:hidden">🔦 Lampe</button>
   </div>
   <div class="valrow">
-    <button id="valider" class="valider" disabled>✔ Valider</button>
+    <button id="valider" class="valider" disabled>👀 Découvrir</button>
     <button id="recup" class="recup" disabled title="Récupéré : je l'emporte">🎒</button>
   </div>
 </div>
@@ -221,7 +222,7 @@
       <button id="rSuiv" class="nav">▶</button>
     </div>
     <div class="valrow">
-      <button id="rValider" class="valider" disabled>✔ Valider</button>
+      <button id="rValider" class="valider" disabled>👀 Découvrir</button>
       <button id="rRecup" class="recup" disabled title="Récupéré : je l'emporte">🎒</button>
     </div>
   </div>
@@ -265,9 +266,9 @@
     </ul>
     <h3>Utilisation</h3>
     <ul>
-      <li><b>✔ Valider</b> : TB découvert (vu, laissé sur place)</li>
+      <li><b>👀 Découvrir</b> : TB vu et laissé sur place</li>
       <li><b>🎒</b> : TB récupéré (je l'emporte) — il va dans « Mon sac » (🎒 en haut)</li>
-      <li><b>📥</b> : apparaît à la place de 🎒 quand le TB lu est déjà dans le sac → le déposer</li>
+      <li><b>🌲</b> : apparaît à la place de 🎒 quand le TB lu est déjà dans le sac → le déposer</li>
       <li>Récupération et dépôt : lien de la cache facultatif (« Partager » dans c:geo ou geocaching.com,
           puis 📋 Coller) ; la position GPS est notée en secours</li>
       <li>Curseur à droite : zoom de la caméra</li>
@@ -305,7 +306,7 @@
 
 <script>
 const $ = id => document.getElementById(id);
-const VERSION_APP = '1.5.0', DATE_VERSION = '03/11/2026';   // à incrémenter à chaque publication
+const VERSION_APP = '1.6.0', DATE_VERSION = '03/11/2026';   // à incrémenter à chaque publication
 const CLE = 'tbCodes.v1';
 const video = $('video');
 
@@ -318,16 +319,16 @@ const dejaVu = c => !!trouver(c);
 // statut : null (inconnu), 'dec' (découvert), 'rec' (dans le sac), 'dep' (déposé)
 const statut = c => { const x = trouver(c); return !x ? null : x.depose ? 'dep' : x.recup ? 'rec' : 'dec'; };
 const dansSac = () => codes.filter(x => x.recup && !x.depose);
-// état des boutons Valider / 🎒 (ou 📥) pour un code (prefixe '' = caméra, 'r' = galerie)
+// état des boutons Valider / 🎒 (ou 🌲) pour un code (prefixe '' = caméra, 'r' = galerie)
 function majBoutons(c, prefixe = '') {
   const ok = c.length === LONGUEUR, st = ok ? statut(c) : null, b = $(prefixe ? 'rRecup' : 'recup'), depot = st === 'rec';
   $(prefixe ? 'rValider' : 'valider').disabled = !ok || !!st;
-  b.textContent = depot ? '📥' : '🎒'; b.classList.toggle('depot', depot);
+  b.textContent = depot ? '🌲' : '🎒'; b.classList.toggle('depot', depot);
   b.title = depot ? 'Déposer (il est dans mon sac)' : "Récupéré : je l'emporte";
   b.disabled = !ok || st === 'dep';
 }
-const etatCode = c => ({ rec:'🎒 ' + c + ' est dans ton sac — 📥 pour le déposer', dep:'📥 ' + c + ' est déjà déposé',
-                         dec:'✔ ' + c + ' est déjà dans la liste (🎒 pour le récupérer)' })[statut(c)] || '';
+const etatCode = c => ({ rec:'🎒 ' + c + ' est dans ton sac — 🌲 pour le déposer', dep:'🌲 ' + c + ' est déjà déposé',
+                         dec:'👀 ' + c + ' est déjà découvert (🎒 pour le récupérer)' })[statut(c)] || '';
 
 // ================= Lieu (cache) d'une récupération / d'un dépôt =================
 const urlDe = t => ((t || '').match(/https?:\/\/\S+/i) || [''])[0];
@@ -676,7 +677,7 @@ function choisir(c, stable) {
   $('code').classList.toggle('ok', stable && !deja);
   $('viseur').className = stable ? 'ok' : 'vu';
   majBoutons(c);
-  $('statut').textContent = etatCode(c) || (stable ? 'Code lu : vérifie puis ✔ Valider ou 🎒' : 'Code repéré, confirmation…');
+  $('statut').textContent = etatCode(c) || (stable ? 'Code lu : vérifie puis 👀 Découvrir ou 🎒' : 'Code repéré, confirmation…');
   if (stable && !deja) vibrer(30);
 }
 function reinitialiser(msg) {
@@ -734,7 +735,7 @@ function enregistrer(c, date, action = 'dec', rep = null) {
     if (!ex || !ex.recup || ex.depose) { toast(c + " n'est pas dans ton sac", true); return false; }
     ex.depose = attacherLieu({ date:d }, rep);
     sauver(); majBadge(); vibrer([40, 60, 40]);
-    toast('📥 ' + c + ' déposé' + (gcDe(rep && rep.lien) ? ' dans ' + gcDe(rep.lien) : ''));
+    toast('🌲 ' + c + ' déposé' + (gcDe(rep && rep.lien) ? ' dans ' + gcDe(rep.lien) : ''));
     return true;
   }
   if (action === 'rec') {
@@ -747,13 +748,13 @@ function enregistrer(c, date, action = 'dec', rep = null) {
   }
   if (ex) { toast(c + ' déjà enregistré', true); return false; }
   codes.push({ code:c, date:d });
-  sauver(); majBadge(); vibrer([40, 60, 40]); toast('✔ ' + c);
+  sauver(); majBadge(); vibrer([40, 60, 40]); toast('👀 ' + c + ' découvert');
   return true;
 }
-// 🎒 / 📥 : récupère le TB, ou le dépose s'il est déjà dans le sac (fenêtre « où ? »)
+// 🎒 / 🌲 : récupère le TB, ou le dépose s'il est déjà dans le sac (fenêtre « où ? »)
 async function actionSac(c, avecGps) {
   const action = statut(c) === 'rec' ? 'dep' : 'rec';
-  const rep = await demanderLieu(action === 'dep' ? `📥 Déposer ${c}` : `🎒 Récupérer ${c}`,
+  const rep = await demanderLieu(action === 'dep' ? `🌲 Déposer ${c}` : `🎒 Récupérer ${c}`,
     action === 'dep' ? 'Dans quelle cache le déposes-tu ?' : 'Dans quelle cache était-il ?', avecGps);
   return rep ? { action, rep } : null;
 }
@@ -781,7 +782,7 @@ champ.addEventListener('input', () => {
   const c = nettoyerChamp(champ);
   majBoutons(c); champ.classList.remove('ok');
   $('statut').textContent = (c.length === LONGUEUR && etatCode(c))
-                          || (c.length < LONGUEUR ? `Saisie manuelle : ${c.length}/${LONGUEUR} caractères` : 'Saisie manuelle : ✔ Valider ou 🎒');
+                          || (c.length < LONGUEUR ? `Saisie manuelle : ${c.length}/${LONGUEUR} caractères` : 'Saisie manuelle : 👀 Découvrir ou 🎒');
 });
 champ.addEventListener('keydown', e => { if (e.key === 'Enter') valider(); });
 champ.addEventListener('blur', () => { if (!champ.value) editionManuelle = false; });
@@ -865,7 +866,7 @@ function proposerRevue(liste) {
 }
 function choisirRevue(c) {
   $('rCode').value = c; majBoutons(c, 'r');
-  $('rStatut').textContent = etatCode(c) || 'Code trouvé : vérifie puis ✔ Valider ou 🎒';
+  $('rStatut').textContent = etatCode(c) || 'Code trouvé : vérifie puis 👀 Découvrir ou 🎒';
 }
 
 async function afficherPhoto() {
@@ -903,7 +904,7 @@ $('rCode').addEventListener('input', () => {
   const c = nettoyerChamp($('rCode'));
   majBoutons(c, 'r');
   $('rStatut').textContent = (c.length === LONGUEUR && etatCode(c))
-                           || (c.length < LONGUEUR ? `${c.length}/${LONGUEUR} caractères` : 'Vérifie puis ✔ Valider ou 🎒');
+                           || (c.length < LONGUEUR ? `${c.length}/${LONGUEUR} caractères` : 'Vérifie puis 👀 Découvrir ou 🎒');
 });
 $('rCode').addEventListener('keydown', e => { if (e.key === 'Enter') $('rValider').click(); });
 
@@ -957,45 +958,66 @@ function groupes() {
 }
 const heure = iso => new Date(iso).toLocaleTimeString('fr-FR', { hour:'2-digit', minute:'2-digit' });
 const jourCourt = iso => new Date(iso).toLocaleDateString('fr-FR', { day:'2-digit', month:'2-digit' });
-// bouton ✕ en deux temps (1er appui : « Sûr ? »)
-function boutonSuppr(action) {
-  const b = document.createElement('button'); b.textContent = '✕'; b.title = 'Supprimer';
+// bouton à confirmer par un 2e appui (le 1er affiche « Sûr ? », « Sortir ? »…)
+function boutonConfirme(texte, classe, titre, question, action) {
+  const b = document.createElement('button'); b.textContent = texte; b.className = classe; b.title = titre;
   b.onclick = () => { if (b.classList.contains('confirmer')) return action();
-    b.classList.add('confirmer'); b.textContent = 'Sûr ?'; setTimeout(() => { b.classList.remove('confirmer'); b.textContent = '✕'; }, 3000); };
+    b.classList.add('confirmer'); b.textContent = question;
+    setTimeout(() => { b.classList.remove('confirmer'); b.textContent = texte; }, 3000); };
   return b;
 }
+const boutonSuppr = action => boutonConfirme('✕', '', 'Supprimer de la liste', 'Sûr ?', action);
 function bouton(texte, classe, titre, action) {
   const b = document.createElement('button'); b.textContent = texte; b.className = classe; b.title = titre; b.onclick = action; return b;
 }
-// ligne d'un code : texte (code + heure + lieu) et boutons
+// « récupéré le 03/11 dans GC8XYZ1 » : le code GC (ou le lien, ou « position GPS ») est cliquable
+function phraseLieu(debut, l) {
+  const span = document.createElement('span'); span.className = 'lieu'; span.append(debut);
+  const gc = gcDe(l && l.lien), url = lienLieu(l);
+  const cible = gc ? [' dans ', gc] : l && l.lien ? [' · ', l.lien.length > 40 ? l.lien.slice(0, 40) + '…' : l.lien]
+              : l && l.lat != null ? [' · ', 'position GPS'] : null;
+  if (cible) {
+    span.append(cible[0]);
+    const a = document.createElement(url ? 'a' : 'span'); a.textContent = cible[1];
+    if (url) { a.href = url; a.target = '_blank'; a.rel = 'noopener'; }
+    span.appendChild(a);
+  }
+  return span;
+}
+const rafraichirTout = () => { sauver(); majBadge(); afficherListe(); if ($('sac').classList.contains('on')) afficherSac(); };
+// sortir du sac : le TB redevient simplement « découvert »
+const sortirDuSac = c => { delete c.recup; delete c.lieuRecup; rafraichirTout(); };
+// ligne d'un code dans la liste. États :
+//   découvert       → 🎒 gris (récupérer : choix de la cache) · ✕ supprimer
+//   dans le sac     → 🌲 déposer · 🎒 couleur (sortir du sac, après confirmation) · ✕ bloqué
+//   récupéré puis déposé (jour de la récupération) → ✕ supprimer
+//   déposé (jour du dépôt) → ↩ annuler le dépôt (le TB revient dans le sac)
 function ligneCode(c, type, parent) {
   const it = document.createElement('div'); it.className = 'item';
   const s = document.createElement('span'); s.className = 'mono'; s.textContent = c.code;
   const t = document.createElement('small'); t.textContent = heure(type === 'dep' ? c.depose.date : c.date); s.appendChild(t);
-  const lieu = type === 'dep' ? c.depose : type === 'rec' ? c.lieuRecup : null;
-  const lib = libLieu(lieu), url = lienLieu(lieu);
-  if (lib || (type === 'rec' && c.depose)) {
-    const l = document.createElement('span'); l.className = 'lieu';
-    if (lib) { const a = document.createElement(url ? 'a' : 'span'); a.textContent = '📍 ' + lib;
-      if (url) { a.href = url; a.target = '_blank'; a.rel = 'noopener'; } l.appendChild(a); }
-    if (type === 'rec' && c.depose) l.append((lib ? ' · ' : '') + '→ déposé le ' + jourCourt(c.depose.date));
+  if (type === 'rec') {
+    const l = phraseLieu('récupéré', c.lieuRecup);
+    l.append(c.depose ? ' · déposé le ' + jourCourt(c.depose.date) : ' · 🎒 dans mon sac');
     s.appendChild(l);
-  }
-  const rafraichir = () => { sauver(); majBadge(); afficherListe(); if ($('sac').classList.contains('on')) afficherSac(); };
-  if (type === 'dec') it.append(s, bouton('🎒', 'sac', 'Passer en récupéré', () => { c.recup = true; rafraichir(); }),
-                                boutonSuppr(() => { codes = codes.filter(x => x !== c); rafraichir(); }));
+  } else if (type === 'dep') s.appendChild(phraseLieu('déposé', c.depose));
+  const supprimer = () => { codes = codes.filter(x => x !== c); rafraichirTout(); };
+  if (type === 'dec') it.append(s, bouton('🎒', 'sac', 'Récupérer (je l\'emporte)', () => recupererDepuisListe(c)), boutonSuppr(supprimer));
   else if (type === 'rec' && !c.depose) it.append(s,
-      bouton('📥', 'dep', 'Déposer', () => deposerDepuisListe(c)),
-      bouton('🎒', 'sac oui', 'Repasser en découvert', () => { delete c.recup; delete c.lieuRecup; rafraichir(); }),
-      boutonSuppr(() => { codes = codes.filter(x => x !== c); rafraichir(); }));
-  else if (type === 'rec') it.append(s, boutonSuppr(() => { codes = codes.filter(x => x !== c); rafraichir(); }));
-  else it.append(s, bouton('↩', 'annul', 'Annuler le dépôt (le remettre dans le sac)', () => { delete c.depose; rafraichir(); }));
+      bouton('🌲', 'dep', 'Déposer', () => deposerDepuisListe(c)),
+      boutonConfirme('🎒', 'sac oui', 'Sortir du sac (redevient découvert)', 'Sortir ?', () => sortirDuSac(c)),
+      bouton('✕', 'bloque', 'Impossible : il est dans le sac', () => toast('Dans le sac : dépose-le 🌲 ou sors-le 🎒 d\'abord', true)));
+  else if (type === 'rec') it.append(s, boutonSuppr(supprimer));
+  else it.append(s, boutonConfirme('↩', 'annul', 'Annuler le dépôt (le remettre dans le sac)', 'Annuler ?', () => { delete c.depose; rafraichirTout(); }));
   parent.appendChild(it);
 }
+async function recupererDepuisListe(c) {
+  const rep = await demanderLieu(`🎒 Récupérer ${c.code}`, 'Dans quelle cache était-il ?', true);
+  if (rep && enregistrer(c.code, new Date(c.date), 'rec', rep)) rafraichirTout();   // garde la date de découverte
+}
 async function deposerDepuisListe(c) {
-  const rep = await demanderLieu(`📥 Déposer ${c.code}`, 'Dans quelle cache le déposes-tu ?', true);
-  if (!rep || !enregistrer(c.code, null, 'dep', rep)) return;
-  afficherListe(); if ($('sac').classList.contains('on')) afficherSac();
+  const rep = await demanderLieu(`🌲 Déposer ${c.code}`, 'Dans quelle cache le déposes-tu ?', true);
+  if (rep && enregistrer(c.code, null, 'dep', rep)) rafraichirTout();
 }
 function zone(classe, titre, evs, parent) {
   if (!evs.length) return;
@@ -1011,7 +1033,7 @@ function afficherListe() {
     const recents = liste.slice().reverse();
     recents.filter(e => e.type === 'dec').forEach(e => ligneCode(e.c, 'dec', L));
     zone('zoneRecup', '🎒 Récupérés', recents.filter(e => e.type === 'rec'), L);   // zones à part, sous la même date
-    zone('zoneDep', '📥 Déposés', recents.filter(e => e.type === 'dep'), L);
+    zone('zoneDep', '🌲 Déposés', recents.filter(e => e.type === 'dep'), L);
   }
 }
 // « Mon sac » : les TB récupérés et pas encore déposés
@@ -1022,14 +1044,10 @@ function afficherSac() {
   for (const c of liste) {
     const it = document.createElement('div'); it.className = 'item';
     const s = document.createElement('span'); s.className = 'mono'; s.textContent = c.code;
-    const l = document.createElement('span'); l.className = 'lieu';
-    const lib = libLieu(c.lieuRecup), url = lienLieu(c.lieuRecup);
-    l.append('récupéré le ' + jourCourt(c.date) + ' ' + heure(c.date) + (lib ? ' · ' : ''));
-    if (lib) { const a = document.createElement(url ? 'a' : 'span'); a.textContent = '📍 ' + lib;
-      if (url) { a.href = url; a.target = '_blank'; a.rel = 'noopener'; } l.appendChild(a); }
-    s.appendChild(l);
-    it.append(s, bouton('📥', 'dep', 'Déposer', () => deposerDepuisListe(c)),
-              boutonSuppr(() => { codes = codes.filter(x => x !== c); sauver(); afficherSac(); }));
+    s.appendChild(phraseLieu('récupéré le ' + jourCourt(c.date) + ' à ' + heure(c.date), c.lieuRecup));
+    // ✕ = sortir du sac (le TB reste dans la liste comme découvert)
+    it.append(s, bouton('🌲', 'dep', 'Déposer', () => deposerDepuisListe(c)),
+              boutonConfirme('✕', '', 'Sortir du sac (redevient découvert)', 'Sortir ?', () => sortirDuSac(c)));
     L.appendChild(it);
   }
 }
