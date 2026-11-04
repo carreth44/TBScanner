@@ -23,7 +23,10 @@ geocaching.com.
 - **🎒 Récupérer** : TB emporté, il va dans « Mon sac ». Quand on relit un TB du sac, le bouton devient
   **Déposer**. Pour la récupération et le dépôt, on peut coller le lien de la cache (facultatif) ; la position
   GPS est notée en secours.
-- **📋 Liste** : codes groupés par jour, export `.txt` (partager, télécharger ou copier).
+- **⚡ Rafale** (pratique sur les events) : chaque nouveau code lu 3 fois de suite est enregistré tout seul en
+  « découvert », avec un bip ; « ↩ Annuler » pendant 6 secondes. Un seul TB à la fois dans le cadre.
+- **📋 Liste** : codes groupés par jour, export `.txt` (partager, télécharger ou copier) à coller sur le site de
+  log. Toucher un code pour le corriger ; ✕ efface une ligne une fois loguée (un TB du sac reste dans le sac).
 
 ## Vie privée
 

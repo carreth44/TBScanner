@@ -50,7 +50,9 @@
           border:2px solid rgba(255,255,255,.3); background:rgba(0,0,0,.55); color:#fff; }
   #code.ok { border-color:var(--vertc); }
   .actions { display:flex; justify-content:space-between; align-items:center; margin-top:10px; }
-  .actions .petit { background:rgba(255,255,255,.12); border-radius:10px; padding:10px 12px; font-size:.9rem; min-width:96px; }
+  .actions .petit { background:rgba(255,255,255,.12); border-radius:10px; padding:10px 10px; font-size:.9rem; min-width:84px; }
+  .actions .gauche { display:flex; gap:6px; }
+  #btnRafale.actif { background:var(--orange); color:#222; font-weight:600; }
   .actions .petit.actif { background:var(--orange); }
   #capture { width:56px; height:56px; border-radius:50%; background:#fff; border:5px solid rgba(255,255,255,.4); background-clip:padding-box; }
   /* Valider (grand, en bas) + Récupéré 🎒 : un geste = une action */
@@ -88,6 +90,9 @@
   .item .mono { font-size:1.15rem; flex:1; min-width:0; }
   .item .lieu { display:block; font-size:.8rem; color:#666; letter-spacing:0; font-family:system-ui; margin-top:2px; }
   .item .lieu a { color:#1f5f3a; }
+  .item .codeTxt { cursor:pointer; border-bottom:1px dashed #bbb; }           /* toucher le code pour le corriger */
+  .item input.editCode { font:inherit; letter-spacing:2px; width:7.5em; padding:2px 4px; border:2px solid #2e8b57; border-radius:6px;
+                         text-transform:uppercase; }
   .item small { color:#888; margin-left:8px; letter-spacing:0; font-family:system-ui; }
   .item button { background:none; color:#b33; font-size:1.2rem; padding:4px 8px; }
   .item button.sac { filter:grayscale(1); opacity:.35; }          /* 🎒 : toucher pour passer en « récupéré » */
@@ -198,7 +203,10 @@
   <div id="chips"></div>
   <input id="code" class="mono" placeholder="------" autocomplete="off" autocapitalize="characters" spellcheck="false">
   <div class="actions">
-    <button class="petit" id="btnEffacer">✕ Effacer</button>
+    <span class="gauche">
+      <button class="petit" id="btnEffacer">✕ Effacer</button>
+      <button class="petit" id="btnRafale" title="Mode rafale : enregistre tout seul chaque nouveau code (découvert)">⚡ Rafale</button>
+    </span>
     <button id="capture" title="Figer l'image (optionnel)"></button>
     <button class="petit" id="btnTorche" title="Lampe" style="visibility:hidden">🔦 Lampe</button>
   </div>
@@ -289,6 +297,9 @@
       <li><b class="placeIcoDep"></b> : apparaît à la place de 🎒 quand le TB lu est déjà dans le sac → le déposer</li>
       <li>Récupération et dépôt : lien de la cache facultatif (« Partager » dans c:geo ou geocaching.com,
           puis 📋 Coller) ; la position GPS est notée en secours</li>
+      <li><b>⚡ Rafale</b> (events) : chaque nouveau code lu 3 fois de suite est enregistré tout seul en « découvert »,
+          avec un bip ; ↩ Annuler pendant 6 s. Un seul TB à la fois dans le cadre.</li>
+      <li>Liste : toucher un code pour le corriger ; ✕ efface la ligne une fois loguée (un TB du sac y reste)</li>
       <li>Curseur à droite : zoom de la caméra ; 🔄 sous le curseur : changer d'objectif (si l'image reste floue)</li>
       <li>Toucher l'image : faire le point à cet endroit (si le téléphone le permet)</li>
       <li>Image floue ? Tiens le TB à ~20 cm et zoome ×2–3 : l'objectif ne fait pas le point à moins de ~10 cm</li>
@@ -329,7 +340,7 @@
 
 <script>
 const $ = id => document.getElementById(id);
-const VERSION_APP = '1.9.0', DATE_VERSION = '04/11/2026';   // à incrémenter à chaque publication
+const VERSION_APP = '1.10.0', DATE_VERSION = '04/11/2026';   // à incrémenter à chaque publication
 const CLE = 'tbCodes.v1';
 // icône « déposer » dessinée (plaque TB qui tombe dans une boîte de cache), identique sur tous les téléphones
 const ICO_DEP = `<img class="ico" alt="déposer" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect x='8' y='40' width='48' height='21' rx='4' fill='%233a9a5e' stroke='%23174a2c' stroke-width='2.5'/%3E%3Crect x='6' y='34' width='52' height='9' rx='3' fill='%231f6b3d' stroke='%23174a2c' stroke-width='2.5'/%3E%3Crect x='27' y='42' width='10' height='7' rx='1.5' fill='%23d9c27a' stroke='%23174a2c' stroke-width='2'/%3E%3Cg stroke='%239aa3ab' stroke-width='2.2' stroke-linecap='round'%3E%3Cline x1='17' y1='6' x2='17' y2='16'/%3E%3Cline x1='47' y1='6' x2='47' y2='16'/%3E%3Cline x1='32' y1='2' x2='32' y2='6'/%3E%3C/g%3E%3Cg transform='rotate(-12 32 19)'%3E%3Crect x='21' y='10' width='22' height='16' rx='3.5' fill='%23c9ced3' stroke='%23555b61' stroke-width='2.2'/%3E%3Ccircle cx='26.5' cy='18' r='2' fill='%23555b61'/%3E%3Crect x='31' y='15' width='9' height='2.2' rx='1' fill='%23555b61'/%3E%3Crect x='31' y='19.5' width='6' height='2.2' rx='1' fill='%23555b61'/%3E%3C/g%3E%3Cpath d='M32 27 v4 m-3.5 -3 l3.5 3.5 l3.5 -3.5' fill='none' stroke='%239aa3ab' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">`;
@@ -758,7 +769,26 @@ function ocr(img, cote) {
 // ================= Scan en continu =================
 // État : on propose un code quand il est lu 2 fois de suite (stable), le champ reste modifiable.
 let fige = false, editionManuelle = false;
-let dernier = null, propose = null, lecturesVides = 0;
+let dernier = null, propose = null, lecturesVides = 0, repetitions = 0;
+// ⚡ Rafale (events) : désactivé à chaque ouverture. Garde-fous : 3 lectures identiques d'affilée, un seul code
+// dans le cadre, uniquement un code nouveau → « découvert » ; bip + ↩ Annuler pendant 6 s.
+let rafale = false, derniereRafale = null;
+const REPET_RAFALE = 3, DELAI_ANNULER = 6000;
+function bip() {
+  try { const a = bip.ctx ||= new (window.AudioContext || window.webkitAudioContext)(), o = a.createOscillator(), g = a.createGain();
+        o.frequency.value = 1320; g.gain.setValueAtTime(.25, a.currentTime); g.gain.exponentialRampToValueAtTime(.001, a.currentTime + .15);
+        o.connect(g).connect(a.destination); o.start(); o.stop(a.currentTime + .16); } catch {}
+}
+function majBtnEffacer() {
+  const annulable = derniereRafale && Date.now() - derniereRafale.t < DELAI_ANNULER;
+  $('btnEffacer').textContent = annulable ? '↩ Annuler' : '✕ Effacer';
+  $('btnEffacer').classList.toggle('actif', !!annulable);
+}
+$('btnRafale').onclick = () => {
+  rafale = !rafale; $('btnRafale').classList.toggle('actif', rafale);
+  if (rafale) bip();      // débloque le son (les navigateurs l'exigent après un geste)
+  toast(rafale ? '⚡ Rafale : chaque nouveau code est enregistré tout seul' : 'Rafale désactivée', true);
+};
 
 function afficherProposition(liste, stable) {
   const ch = $('chips'); ch.innerHTML = '';
@@ -778,7 +808,7 @@ function choisir(c, stable) {
   if (stable && !deja) vibrer(30);
 }
 function reinitialiser(msg) {
-  propose = null; dernier = null; editionManuelle = false; lecturesVides = 0;
+  propose = null; dernier = null; editionManuelle = false; lecturesVides = 0; repetitions = 0;
   $('code').value = ''; $('code').classList.remove('ok'); $('chips').innerHTML = '';
   $('viseur').className = ''; majBoutons('');
   $('statut').textContent = msg || 'Vise le code du TB…';
@@ -796,9 +826,19 @@ async function boucle() {
       if (liste.length) {
         lecturesVides = 0;
         const stable = liste[0] === dernier || liste[0] === propose;
+        repetitions = liste[0] === dernier ? repetitions + 1 : 1;
         dernier = liste[0];
+        if (rafale && repetitions >= REPET_RAFALE && liste.length === 1 && !dejaVu(liste[0])) {
+          const c = liste[0];
+          if (enregistrer(c, null, 'dec')) {
+            bip(); derniereRafale = { code:c, t:Date.now() };
+            reinitialiser(`⚡ ${c} enregistré — TB suivant (↩ Annuler possible)`);
+            majBtnEffacer(); setTimeout(majBtnEffacer, DELAI_ANNULER + 50);
+          }
+          continue;
+        }
         if (liste[0] !== propose || stable) afficherProposition(liste, stable);
-      } else if (!propose) {
+      } else if (!propose && !(derniereRafale && Date.now() - derniereRafale.t < 3000)) {   // laisse lire « ⚡ … enregistré »
         // après plusieurs secondes sans rien lire : probablement flou (trop près)
         $('statut').textContent = ++lecturesVides > 10 ? 'Flou ? Tiens le TB à ~20 cm et zoome ×2–3, ou touche l\'image' : 'Vise le code du TB…';
       }
@@ -872,7 +912,15 @@ async function valider(sac = false) {
 }
 $('valider').onclick = () => valider(false);
 $('recup').onclick = () => valider(true);
-$('btnEffacer').onclick = () => { $('code').blur(); degeler(); reinitialiser(); };
+$('btnEffacer').onclick = () => {
+  // juste après un enregistrement en rafale : ↩ Annuler le retire
+  if (derniereRafale && Date.now() - derniereRafale.t < DELAI_ANNULER) {
+    const c = trouver(derniereRafale.code);
+    if (c && !c.recup && !c.depose) { codes = codes.filter(x => x !== c); sauver(); majBadge(); toast('↩ ' + derniereRafale.code + ' annulé', true); }
+    derniereRafale = null; majBtnEffacer(); reinitialiser(); return;
+  }
+  $('code').blur(); degeler(); reinitialiser();
+};
 
 // Saisie manuelle : on suspend la lecture auto tant que l'utilisateur édite
 const champ = $('code');
@@ -1035,7 +1083,7 @@ $('rCadrer').onclick = () => { modeCadre = !modeCadre; $('rCadrer').classList.to
 
 // ================= Liste & export =================
 function majBadge() {
-  $('badge').textContent = codes.length; $('nb').textContent = codes.length;
+  const n0 = evenements().length; $('badge').textContent = n0; $('nb').textContent = n0;
   const n = dansSac().length; $('badgeSac').textContent = n; $('badgeSac').style.display = n ? '' : 'none'; $('nbSac').textContent = n;
 }
 function libJour(iso) { return new Date(iso).toLocaleDateString('fr-FR', { weekday:'long', day:'2-digit', month:'2-digit', year:'numeric' }); }
@@ -1043,8 +1091,9 @@ function libJour(iso) { return new Date(iso).toLocaleDateString('fr-FR', { weekd
 function evenements() {
   const ev = [];
   for (const c of codes) {
-    ev.push({ c, type:c.recup ? 'rec' : 'dec', date:c.date });
-    if (c.depose) ev.push({ c, type:'dep', date:c.depose.date });
+    // masqueRec / masqueDep : ligne effacée de la liste (déjà loguée) ; le TB peut rester dans le sac
+    if (!(c.recup && c.masqueRec)) ev.push({ c, type:c.recup ? 'rec' : 'dec', date:c.date });
+    if (c.depose && !c.masqueDep) ev.push({ c, type:'dep', date:c.depose.date });
   }
   return ev;
 }
@@ -1085,29 +1134,65 @@ function phraseLieu(debut, l) {
 }
 const rafraichirTout = () => { sauver(); majBadge(); afficherListe(); if ($('sac').classList.contains('on')) afficherSac(); };
 // sortir du sac : le TB redevient simplement « découvert »
-const sortirDuSac = c => { delete c.recup; delete c.lieuRecup; rafraichirTout(); };
+const sortirDuSac = c => { delete c.recup; delete c.lieuRecup; delete c.masqueRec; rafraichirTout(); };
+// ✕ sur une ligne (après le log sur le site) : on efface cette ligne ; le TB n'est supprimé que s'il n'a plus
+// aucune ligne visible ET n'est plus dans le sac
+function effacerLigne(c, type) {
+  if (type === 'rec') c.masqueRec = true;
+  else if (type === 'dep') c.masqueDep = true;
+  const resteRec = c.recup && !c.masqueRec, resteDep = c.depose && !c.masqueDep, auSac = c.recup && !c.depose;
+  if (type === 'dec' || (!resteRec && !resteDep && !auSac)) codes = codes.filter(x => x !== c);
+  else if (type === 'rec' && auSac) toast('Effacé de la liste — reste dans 🎒 Mon sac', true);
+  rafraichirTout();
+}
+// Toucher le code : le corriger (ex. erreur de lecture)
+function editerCode(c, el) {
+  const ch = document.createElement('input'); ch.className = 'editCode'; ch.value = c.code;
+  ch.setAttribute('autocapitalize', 'characters'); ch.setAttribute('autocomplete', 'off'); ch.spellcheck = false;
+  el.replaceWith(ch); ch.focus(); ch.select();
+  let fini = false;
+  const terminer = garder => {
+    if (fini) return; fini = true;
+    const v = nettoyer(ch.value);
+    if (garder && v !== c.code) {
+      if (v.length !== LONGUEUR) toast(`Il faut ${LONGUEUR} caractères`, true);
+      else if (trouver(v)) toast(v + ' est déjà dans la liste', true);
+      else { c.code = v; sauver(); toast('✔ Corrigé : ' + v, true); }
+    }
+    rafraichirTout();
+  };
+  ch.addEventListener('input', () => nettoyerChamp(ch));
+  ch.addEventListener('keydown', e => { if (e.key === 'Enter') terminer(true); if (e.key === 'Escape') terminer(false); });
+  ch.addEventListener('blur', () => terminer(true));
+}
+function texteCode(c) {
+  const el = document.createElement('span'); el.className = 'codeTxt'; el.textContent = c.code; el.title = 'Toucher pour corriger';
+  el.onclick = () => editerCode(c, el);
+  return el;
+}
 // ligne d'un code dans la liste. États :
 //   découvert       → 🎒 gris (récupérer : choix de la cache) · ✕ supprimer
-//   dans le sac     → (dépôt) déposer · 🎒 couleur (sortir du sac, après confirmation) · ✕ bloqué
-//   récupéré puis déposé (jour de la récupération) → ✕ supprimer
-//   déposé (jour du dépôt) → ↩ annuler le dépôt (le TB revient dans le sac)
+//   dans le sac     → (dépôt) déposer · 🎒 couleur (sortir du sac, après confirmation) · ✕ efface la ligne (reste au sac)
+//   récupéré puis déposé (jour de la récupération) → ✕ efface la ligne
+//   déposé (jour du dépôt) → ↩ annuler le dépôt (le TB revient dans le sac) · ✕ efface la ligne
+//   toucher le code → le corriger
 function ligneCode(c, type, parent) {
   const it = document.createElement('div'); it.className = 'item';
-  const s = document.createElement('span'); s.className = 'mono'; s.textContent = c.code;
+  const s = document.createElement('span'); s.className = 'mono'; s.appendChild(texteCode(c));
   const t = document.createElement('small'); t.textContent = heure(type === 'dep' ? c.depose.date : c.date); s.appendChild(t);
   if (type === 'rec') {
     s.appendChild(phraseLieu('récupéré', c.lieuRecup));                       // 1re ligne : d'où il vient
     if (c.depose) s.appendChild(phraseLieu('déposé le ' + jourCourt(c.depose.date), c.depose));   // 2e ligne : où il est
     else { const l2 = document.createElement('span'); l2.className = 'lieu'; l2.textContent = 'Dans mon sac'; s.appendChild(l2); }
   } else if (type === 'dep') s.appendChild(phraseLieu('déposé', c.depose));
-  const supprimer = () => { codes = codes.filter(x => x !== c); rafraichirTout(); };
-  if (type === 'dec') it.append(s, bouton('🎒', 'sac', 'Récupérer (je l\'emporte)', () => recupererDepuisListe(c)), boutonSuppr(supprimer));
+  const effacer = boutonSuppr(() => effacerLigne(c, type));
+  if (type === 'dec') it.append(s, bouton('🎒', 'sac', 'Récupérer (je l\'emporte)', () => recupererDepuisListe(c)), effacer);
   else if (type === 'rec' && !c.depose) it.append(s,
       bouton(ICO_DEP, 'dep', 'Déposer', () => deposerDepuisListe(c)),
-      boutonConfirme('🎒', 'sac oui', 'Sortir du sac (redevient découvert)', 'Sortir ?', () => sortirDuSac(c)),
-      bouton('✕', 'bloque', 'Impossible : il est dans le sac', () => toast("Dans le sac : dépose-le ou sors-le du sac d'abord", true)));
-  else if (type === 'rec') it.append(s, boutonSuppr(supprimer));
-  else it.append(s, boutonConfirme('↩', 'annul', 'Annuler le dépôt (le remettre dans le sac)', 'Annuler ?', () => { delete c.depose; rafraichirTout(); }));
+      boutonConfirme('🎒', 'sac oui', 'Sortir du sac (redevient découvert)', 'Sortir ?', () => sortirDuSac(c)), effacer);
+  else if (type === 'rec') it.append(s, effacer);
+  else it.append(s, boutonConfirme('↩', 'annul', 'Annuler le dépôt (le remettre dans le sac)', 'Annuler ?',
+                                    () => { delete c.depose; delete c.masqueDep; rafraichirTout(); }), effacer);
   parent.appendChild(it);
 }
 async function recupererDepuisListe(c) {
@@ -1126,7 +1211,7 @@ function zone(classe, titre, evs, parent) {
 }
 function afficherListe() {
   const L = $('liste'); L.innerHTML = ''; majBadge();
-  if (!codes.length) { L.innerHTML = '<div class="vide">Aucun code pour l\'instant</div>'; return; }
+  if (!evenements().length) { L.innerHTML = '<div class="vide">Aucun code pour l\'instant</div>'; return; }
   for (const [jour, liste] of [...groupes()].reverse()) {
     const h = document.createElement('div'); h.className = 'jour'; h.textContent = `${jour} (${liste.length})`; L.appendChild(h);
     const recents = liste.slice().reverse();
@@ -1142,7 +1227,7 @@ function afficherSac() {
   if (!liste.length) { L.innerHTML = '<div class="vide">Ton sac est vide</div>'; return; }
   for (const c of liste) {
     const it = document.createElement('div'); it.className = 'item';
-    const s = document.createElement('span'); s.className = 'mono'; s.textContent = c.code;
+    const s = document.createElement('span'); s.className = 'mono'; s.appendChild(texteCode(c));
     s.appendChild(phraseLieu('récupéré le ' + jourCourt(c.date) + ' à ' + heure(c.date), c.lieuRecup));
     // ✕ = sortir du sac (le TB reste dans la liste comme découvert)
     it.append(s, bouton(ICO_DEP, 'dep', 'Déposer', () => deposerDepuisListe(c)),
@@ -1198,10 +1283,13 @@ $('copier').onclick = async () => {
 };
 let confirmVider = false;
 $('vider').onclick = () => {
-  if (!codes.length) return;
+  if (!evenements().length) return;
   if (!confirmVider) { confirmVider = true; $('vider').textContent = '⚠️ Confirmer ?';
     setTimeout(() => { confirmVider = false; $('vider').textContent = '🗑️ Tout effacer'; }, 3000); return; }
-  codes = []; sauver(); afficherListe(); confirmVider = false; $('vider').textContent = '🗑️ Tout effacer';
+  // tout effacer… sauf les TB encore dans le sac (ils y restent, leur ligne disparaît)
+  codes = codes.filter(c => c.recup && !c.depose); codes.forEach(c => c.masqueRec = true);
+  sauver(); afficherListe(); confirmVider = false; $('vider').textContent = '🗑️ Tout effacer';
+  if (codes.length) toast(`Liste vidée — ${codes.length} TB ${codes.length > 1 ? 'restent' : 'reste'} dans 🎒 Mon sac`, true);
 };
 
 // ================= Démarrage =================
