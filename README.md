@@ -26,7 +26,9 @@ geocaching.com.
 - **⚡ Rafale** (pratique sur les events) : chaque nouveau code lu 3 fois de suite est enregistré tout seul en
   « découvert », avec un bip ; « ↩ Annuler » pendant 6 secondes. Un seul TB à la fois dans le cadre.
 - **📋 Liste** : codes groupés par jour, export `.txt` (partager, télécharger ou copier) à coller sur le site de
-  log. Toucher un code pour le corriger ; ✕ efface une ligne une fois loguée (un TB du sac reste dans le sac).
+  log. Toucher un code pour le corriger ; ✕ efface une ligne une fois loguée, « 🧹 Effacer le jour » toute la
+  journée (un TB du sac reste dans le sac).
+- **À propos** : toucher le titre « TBScanner ».
 
 ## Vie privée
 

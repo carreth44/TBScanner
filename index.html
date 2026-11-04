@@ -34,7 +34,8 @@
   /* barre de titre pleine largeur, opaque */
   #haut { position:fixed; top:0; left:0; right:0; z-index:5; padding:calc(env(safe-area-inset-top) + 8px) 12px 8px; display:flex; gap:10px; align-items:center;
           background:#1f5f3a; box-shadow:0 2px 8px rgba(0,0,0,.4); }
-  #haut h1 { font-size:1.15rem; margin:0; flex:1; }
+  #haut h1 { font-size:1.15rem; margin:0; flex:1; display:flex; align-items:center; gap:8px; cursor:pointer; }   /* toucher = À propos */
+  #haut h1 img, #credits .titre img { width:1.8em; height:1.8em; }
   .rond { width:44px; height:44px; border-radius:50%; background:rgba(255,255,255,.16); font-size:1.25rem; position:relative; }
   .rond.actif { background:var(--orange); }
   #badge, #badgeSac { position:absolute; top:-4px; right:-4px; background:var(--vert); border-radius:10px; font-size:.75rem; padding:1px 6px; }
@@ -85,7 +86,10 @@
   #panneau header h2, #sac header h2 { flex:1; margin:0; font-size:1.1rem; }
   #panneau header button, #sac header button { background:rgba(255,255,255,.2); border-radius:10px; padding:8px 12px; }
   #liste, #listeSac { flex:1; overflow:auto; padding:8px 14px calc(env(safe-area-inset-bottom) + 8px); }
-  .jour { font-weight:600; color:#1f5f3a; margin:14px 0 4px; text-transform:capitalize; }
+  .jour { font-weight:600; color:#1f5f3a; margin:14px 0 4px; display:flex; align-items:center; justify-content:space-between; }
+  .jour span { text-transform:capitalize; }
+  .jour button { background:#e3e0d8; border-radius:10px; padding:5px 10px; font-size:.85rem; font-weight:400; color:#444; }
+  .jour button.confirmer { background:#b33; color:#fff; }
   .item { display:flex; justify-content:space-between; align-items:center; background:#fff; border-radius:10px; padding:10px 12px; margin:6px 0; }
   .item .mono { font-size:1.15rem; flex:1; min-width:0; }
   .item .lieu { display:block; font-size:.8rem; color:#666; letter-spacing:0; font-family:system-ui; margin-top:2px; }
@@ -191,7 +195,7 @@
 <div id="viseur"></div>
 
 <div id="haut">
-  <h1>📷 TBScanner</h1>
+  <h1 id="titre" title="À propos"><img alt="" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cg transform='rotate(-12 32 32)'%3E%3Crect x='9' y='17' width='46' height='30' rx='7' fill='%23d3d8dd' stroke='%23555b61' stroke-width='3'/%3E%3Ccircle cx='18.5' cy='32' r='3.6' fill='%231f5f3a' stroke='%23555b61' stroke-width='2'/%3E%3Crect x='27' y='25' width='21' height='4' rx='2' fill='%23555b61'/%3E%3Crect x='27' y='35' width='14' height='4' rx='2' fill='%23555b61'/%3E%3C/g%3E%3C/svg%3E">TBScanner</h1>
   <label class="rond" for="galerie" title="Photos de la galerie" style="display:flex;align-items:center;justify-content:center">🖼️</label>
   <input type="file" id="galerie" accept="image/*" multiple>
   <button class="rond" id="btnSac" title="Mon sac (TB que j'ai avec moi)">🎒<span id="badgeSac">0</span></button>
@@ -257,7 +261,6 @@
 <section id="panneau">
   <header>
     <h2>Codes enregistrés (<span id="nb">0</span>)</h2>
-    <button id="btnInfo" title="À propos">ℹ️</button>
     <button id="fermer">✕ Fermer</button>
   </header>
   <div id="liste"></div>
@@ -275,7 +278,7 @@
     <button id="fermerInfo">✕ Fermer</button>
   </header>
   <div class="contenu">
-    <p class="titre">📷 TBScanner <span id="version"></span></p>
+    <p class="titre"><img alt="" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cg transform='rotate(-12 32 32)'%3E%3Crect x='9' y='17' width='46' height='30' rx='7' fill='%23d3d8dd' stroke='%23555b61' stroke-width='3'/%3E%3Ccircle cx='18.5' cy='32' r='3.6' fill='%231f5f3a' stroke='%23555b61' stroke-width='2'/%3E%3Crect x='27' y='25' width='21' height='4' rx='2' fill='%23555b61'/%3E%3Crect x='27' y='35' width='14' height='4' rx='2' fill='%23555b61'/%3E%3C/g%3E%3C/svg%3E" style="vertical-align:middle"> TBScanner <span id="version"></span></p>
     <p>Lecture des codes de suivi de Travel Bugs et géocoins, pour les loguer ensuite sur geocaching.com.</p>
     <h3>Auteur</h3>
     <p>carreth — <a href="https://github.com/carreth44/TBScanner" target="_blank" rel="noopener">github.com/carreth44/TBScanner</a></p>
@@ -299,7 +302,9 @@
           puis 📋 Coller) ; la position GPS est notée en secours</li>
       <li><b>⚡ Rafale</b> (events) : chaque nouveau code lu 3 fois de suite est enregistré tout seul en « découvert »,
           avec un bip ; ↩ Annuler pendant 6 s. Un seul TB à la fois dans le cadre.</li>
-      <li>Liste : toucher un code pour le corriger ; ✕ efface la ligne une fois loguée (un TB du sac y reste)</li>
+      <li>Liste : toucher un code pour le corriger ; ✕ efface la ligne une fois loguée, 🧹 tout le jour
+          (un TB du sac reste dans le sac)</li>
+      <li>Toucher le titre « TBScanner » : cette page À propos</li>
       <li>Curseur à droite : zoom de la caméra ; 🔄 sous le curseur : changer d'objectif (si l'image reste floue)</li>
       <li>Toucher l'image : faire le point à cet endroit (si le téléphone le permet)</li>
       <li>Image floue ? Tiens le TB à ~20 cm et zoome ×2–3 : l'objectif ne fait pas le point à moins de ~10 cm</li>
@@ -340,7 +345,7 @@
 
 <script>
 const $ = id => document.getElementById(id);
-const VERSION_APP = '1.10.0', DATE_VERSION = '04/11/2026';   // à incrémenter à chaque publication
+const VERSION_APP = '1.11.0', DATE_VERSION = '04/11/2026';   // à incrémenter à chaque publication
 const CLE = 'tbCodes.v1';
 // icône « déposer » dessinée (plaque TB qui tombe dans une boîte de cache), identique sur tous les téléphones
 const ICO_DEP = `<img class="ico" alt="déposer" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect x='8' y='40' width='48' height='21' rx='4' fill='%233a9a5e' stroke='%23174a2c' stroke-width='2.5'/%3E%3Crect x='6' y='34' width='52' height='9' rx='3' fill='%231f6b3d' stroke='%23174a2c' stroke-width='2.5'/%3E%3Crect x='27' y='42' width='10' height='7' rx='1.5' fill='%23d9c27a' stroke='%23174a2c' stroke-width='2'/%3E%3Cg stroke='%239aa3ab' stroke-width='2.2' stroke-linecap='round'%3E%3Cline x1='17' y1='6' x2='17' y2='16'/%3E%3Cline x1='47' y1='6' x2='47' y2='16'/%3E%3Cline x1='32' y1='2' x2='32' y2='6'/%3E%3C/g%3E%3Cg transform='rotate(-12 32 19)'%3E%3Crect x='21' y='10' width='22' height='16' rx='3.5' fill='%23c9ced3' stroke='%23555b61' stroke-width='2.2'/%3E%3Ccircle cx='26.5' cy='18' r='2' fill='%23555b61'/%3E%3Crect x='31' y='15' width='9' height='2.2' rx='1' fill='%23555b61'/%3E%3Crect x='31' y='19.5' width='6' height='2.2' rx='1' fill='%23555b61'/%3E%3C/g%3E%3Cpath d='M32 27 v4 m-3.5 -3 l3.5 3.5 l3.5 -3.5' fill='none' stroke='%239aa3ab' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">`;
@@ -818,7 +823,8 @@ async function boucle() {
   while (true) {
     const actif = moteur && flux && !fige && !editionManuelle && !document.hidden
                   && !$('panneau').classList.contains('on') && !$('revue').classList.contains('on')
-                  && !$('sac').classList.contains('on') && !$('dialogue').classList.contains('on') && video.videoWidth;
+                  && !$('sac').classList.contains('on') && !$('dialogue').classList.contains('on')
+                  && !$('credits').classList.contains('on') && video.videoWidth;
     if (!actif) { await new Promise(r => setTimeout(r, 300)); continue; }
     try {
       const liste = candidats(await ocr(preparer(video, zoneVideo(), 960), 960));
@@ -1137,12 +1143,21 @@ const rafraichirTout = () => { sauver(); majBadge(); afficherListe(); if ($('sac
 const sortirDuSac = c => { delete c.recup; delete c.lieuRecup; delete c.masqueRec; rafraichirTout(); };
 // ✕ sur une ligne (après le log sur le site) : on efface cette ligne ; le TB n'est supprimé que s'il n'a plus
 // aucune ligne visible ET n'est plus dans le sac
-function effacerLigne(c, type) {
+function masquer(c, type) {            // efface une ligne sans réafficher ; renvoie vrai si le TB reste au sac
   if (type === 'rec') c.masqueRec = true;
   else if (type === 'dep') c.masqueDep = true;
   const resteRec = c.recup && !c.masqueRec, resteDep = c.depose && !c.masqueDep, auSac = c.recup && !c.depose;
   if (type === 'dec' || (!resteRec && !resteDep && !auSac)) codes = codes.filter(x => x !== c);
-  else if (type === 'rec' && auSac) toast('Effacé de la liste — reste dans 🎒 Mon sac', true);
+  return type === 'rec' && auSac;
+}
+function effacerLigne(c, type) {
+  if (masquer(c, type)) toast('Effacé de la liste — reste dans 🎒 Mon sac', true);
+  rafraichirTout();
+}
+// 🧹 à côté de la date : efface toutes les lignes du jour (après le log sur le site) ; les TB du sac y restent
+function effacerJour(evs) {
+  const auSac = evs.filter(e => masquer(e.c, e.type)).length;
+  toast(auSac ? `Jour effacé — ${auSac} TB ${auSac > 1 ? 'restent' : 'reste'} dans 🎒 Mon sac` : 'Jour effacé', true);
   rafraichirTout();
 }
 // Toucher le code : le corriger (ex. erreur de lecture)
@@ -1213,7 +1228,11 @@ function afficherListe() {
   const L = $('liste'); L.innerHTML = ''; majBadge();
   if (!evenements().length) { L.innerHTML = '<div class="vide">Aucun code pour l\'instant</div>'; return; }
   for (const [jour, liste] of [...groupes()].reverse()) {
-    const h = document.createElement('div'); h.className = 'jour'; h.textContent = `${jour} (${liste.length})`; L.appendChild(h);
+    const h = document.createElement('div'); h.className = 'jour';
+    const lib = document.createElement('span'); lib.textContent = `${jour} (${liste.length})`;
+    h.append(lib, boutonConfirme('🧹 Effacer le jour', '', 'Effacer ce jour (une fois logué) ; les TB du sac y restent',
+                                 'Effacer ce jour ?', () => effacerJour(liste)));
+    L.appendChild(h);
     const recents = liste.slice().reverse();
     recents.filter(e => e.type === 'dec').forEach(e => ligneCode(e.c, 'dec', L));
     zone('zoneRecup', '🎒 Récupérés', recents.filter(e => e.type === 'rec'), L);   // zones à part, sous la même date
@@ -1259,7 +1278,7 @@ $('btnListe').onclick = () => { afficherListe(); $('panneau').classList.add('on'
 $('fermer').onclick = () => { $('panneau').classList.remove('on'); if (!flux) demarrerCamera(); };
 document.querySelectorAll('.placeIcoDep').forEach(e => e.innerHTML = ICO_DEP);
 $('version').textContent = `v${VERSION_APP} · ${DATE_VERSION}`;
-$('btnInfo').onclick = () => $('credits').classList.add('on');
+$('titre').onclick = () => $('credits').classList.add('on');          // toucher le titre = À propos
 $('fermerInfo').onclick = () => $('credits').classList.remove('on');
 
 $('telecharger').onclick = () => {
