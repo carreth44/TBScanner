@@ -173,6 +173,13 @@
            padding:7px 16px; border-radius:12px; font-size:1.05rem; opacity:0; transition:all .2s; pointer-events:none; z-index:20; white-space:nowrap; }
   #toast.on { opacity:1; transform:translate(-50%,0); }
   #toast.info { background:rgba(50,50,50,.95); font-size:1rem; }
+  /* bandeau « nouvelle version » sous la barre de titre */
+  #maj { position:fixed; left:8px; right:8px; top:calc(env(safe-area-inset-top) + 64px); z-index:30; display:none; align-items:center; gap:10px;
+         background:#f0a020; color:#222; border-radius:12px; padding:8px 8px 8px 14px; box-shadow:0 4px 14px rgba(0,0,0,.4); }
+  #maj.on { display:flex; }
+  #maj span { flex:1; font-size:.95rem; }
+  #maj button { background:#1f5f3a; color:#fff; border-radius:10px; padding:9px 12px; font-weight:600; }
+  #maj button.plusTard { background:none; color:#222; padding:9px 6px; font-weight:400; }
 </style>
 </head>
 <body>
@@ -322,11 +329,14 @@
   </div>
 </div>
 
+<div id="maj"><span id="majTexte">Nouvelle version disponible</span>
+  <button id="majOk">Mettre à jour</button><button class="plusTard" id="majNon">Plus tard</button></div>
+
 <div id="toast"></div>
 
 <script>
 const $ = id => document.getElementById(id);
-const VERSION_APP = '1.8.0', DATE_VERSION = '04/11/2026';   // à incrémenter à chaque publication
+const VERSION_APP = '1.8.1', DATE_VERSION = '04/11/2026';   // à incrémenter à chaque publication
 const CLE = 'tbCodes.v1';
 // icône « déposer » dessinée (plaque TB qui tombe dans une boîte de cache), identique sur tous les téléphones
 const ICO_DEP = `<img class="ico" alt="déposer" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect x='8' y='40' width='48' height='21' rx='4' fill='%233a9a5e' stroke='%23174a2c' stroke-width='2.5'/%3E%3Crect x='6' y='34' width='52' height='9' rx='3' fill='%231f6b3d' stroke='%23174a2c' stroke-width='2.5'/%3E%3Crect x='27' y='42' width='10' height='7' rx='1.5' fill='%23d9c27a' stroke='%23174a2c' stroke-width='2'/%3E%3Cg stroke='%239aa3ab' stroke-width='2.2' stroke-linecap='round'%3E%3Cline x1='17' y1='6' x2='17' y2='16'/%3E%3Cline x1='47' y1='6' x2='47' y2='16'/%3E%3Cline x1='32' y1='2' x2='32' y2='6'/%3E%3C/g%3E%3Cg transform='rotate(-12 32 19)'%3E%3Crect x='21' y='10' width='22' height='16' rx='3.5' fill='%23c9ced3' stroke='%23555b61' stroke-width='2.2'/%3E%3Ccircle cx='26.5' cy='18' r='2' fill='%23555b61'/%3E%3Crect x='31' y='15' width='9' height='2.2' rx='1' fill='%23555b61'/%3E%3Crect x='31' y='19.5' width='6' height='2.2' rx='1' fill='%23555b61'/%3E%3C/g%3E%3Cpath d='M32 27 v4 m-3.5 -3 l3.5 3.5 l3.5 -3.5' fill='none' stroke='%239aa3ab' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">`;
@@ -595,7 +605,10 @@ $('btnTorche').onclick = async () => {
 // Économie de batterie : on coupe la caméra quand l'appli passe en arrière-plan
 document.addEventListener('visibilitychange', async () => {
   if (document.hidden) arreterCamera();
-  else if (!$('panneau').classList.contains('on')) { await demarrerCamera(); }
+  else {
+    verifierMaj();                                  // l'appli installée reprend sans recharger : on vérifie ici aussi
+    if (!$('panneau').classList.contains('on')) await demarrerCamera();
+  }
 });
 
 // ================= Prétraitement =================
@@ -1233,6 +1246,21 @@ $('vider').onclick = () => {
 // ================= Démarrage =================
 // Appli installable et utilisable hors ligne (sw.js) ; stockage persistant pour que le moteur (~30 Mo) ne soit pas effacé
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(e => console.warn('service worker :', e));
+// Nouvelle version en ligne ? (au démarrage et à chaque retour dans l'appli) → bandeau « Mettre à jour »
+let majIgnoree = '';
+async function verifierMaj() {
+  if (!navigator.onLine) return;
+  try {
+    const r = await fetch('./?maj=' + Date.now(), { cache:'no-store' }); if (!r.ok) return;
+    const v = ((await r.text()).match(/VERSION_APP = '([^']+)'/) || [])[1];
+    if (!v || v === VERSION_APP || v === majIgnoree) return;
+    $('majTexte').textContent = `Nouvelle version ${v} disponible`; $('maj').classList.add('on');
+    navigator.serviceWorker && navigator.serviceWorker.getRegistration().then(g => g && g.update()).catch(() => {});
+  } catch {}
+}
+$('majOk').onclick = () => location.reload();
+$('majNon').onclick = () => { majIgnoree = $('majTexte').textContent.match(/[\d.]+/)[0]; $('maj').classList.remove('on'); };
+setTimeout(verifierMaj, 3000);
 try { navigator.storage && navigator.storage.persist && navigator.storage.persist(); } catch {}
 (async () => {
   majBadge();
