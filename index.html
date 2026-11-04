@@ -66,7 +66,8 @@
   #zoom.on { display:flex; }
   #zoom input { writing-mode:vertical-lr; direction:rtl; flex:1; width:28px; margin:0; accent-color:var(--vertc); }
   #zoomVal { font-size:.7rem; opacity:.85; }
-  #btnObjectif { background:none; font-size:1.05rem; padding:2px 0 0; }
+  #btnObjectif, #btnPres { background:none; font-size:1.05rem; padding:2px 0 0; border-radius:50%; width:30px; height:30px; }
+  #btnPres.actif { background:var(--orange); }
   /* anneau de mise au point (toucher l'image) */
   #anneau { position:fixed; width:72px; height:72px; margin:-36px 0 0 -36px; border:2px solid #fff; border-radius:50%;
             pointer-events:none; opacity:0; z-index:3; }
@@ -208,6 +209,7 @@
   <input type="range" id="zoomCurseur" min="1" max="4" step="0.1" value="1" aria-label="Zoom">
   <span>－</span>
   <span id="zoomVal">×1</span>
+  <button id="btnPres" title="Mise au point de près (~12 cm)" style="display:none">🌼</button>
   <button id="btnObjectif" title="Changer d'objectif" style="display:none">🔄</button>
 </div>
 <div id="anneau"></div>
@@ -286,7 +288,8 @@
           puis 📋 Coller) ; la position GPS est notée en secours</li>
       <li>Curseur à droite : zoom de la caméra ; 🔄 sous le curseur : changer d'objectif (si l'image reste floue)</li>
       <li>Toucher l'image : faire le point à cet endroit (si le téléphone le permet)</li>
-      <li>Image floue de près ? Recule le TB à ~15 cm et zoome : les objectifs ne font pas le point trop près</li>
+      <li>Image floue ? Tiens le TB à ~20 cm et zoome ×2–3 : l'objectif ne fait pas le point à moins de ~10 cm</li>
+      <li>🌼 (sous le curseur) : mise au point bloquée au plus près (~12 cm), pour les plaques tenues tout près</li>
     </ul>
     <h3>Caméra (diagnostic)</h3>
     <p id="diagCam">—</p>
@@ -323,7 +326,7 @@
 
 <script>
 const $ = id => document.getElementById(id);
-const VERSION_APP = '1.7.0', DATE_VERSION = '04/11/2026';   // à incrémenter à chaque publication
+const VERSION_APP = '1.8.0', DATE_VERSION = '04/11/2026';   // à incrémenter à chaque publication
 const CLE = 'tbCodes.v1';
 // icône « déposer » dessinée (plaque TB qui tombe dans une boîte de cache), identique sur tous les téléphones
 const ICO_DEP = `<img class="ico" alt="déposer" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect x='8' y='40' width='48' height='21' rx='4' fill='%233a9a5e' stroke='%23174a2c' stroke-width='2.5'/%3E%3Crect x='6' y='34' width='52' height='9' rx='3' fill='%231f6b3d' stroke='%23174a2c' stroke-width='2.5'/%3E%3Crect x='27' y='42' width='10' height='7' rx='1.5' fill='%23d9c27a' stroke='%23174a2c' stroke-width='2'/%3E%3Cg stroke='%239aa3ab' stroke-width='2.2' stroke-linecap='round'%3E%3Cline x1='17' y1='6' x2='17' y2='16'/%3E%3Cline x1='47' y1='6' x2='47' y2='16'/%3E%3Cline x1='32' y1='2' x2='32' y2='6'/%3E%3C/g%3E%3Cg transform='rotate(-12 32 19)'%3E%3Crect x='21' y='10' width='22' height='16' rx='3.5' fill='%23c9ced3' stroke='%23555b61' stroke-width='2.2'/%3E%3Ccircle cx='26.5' cy='18' r='2' fill='%23555b61'/%3E%3Crect x='31' y='15' width='9' height='2.2' rx='1' fill='%23555b61'/%3E%3Crect x='31' y='19.5' width='6' height='2.2' rx='1' fill='%23555b61'/%3E%3C/g%3E%3Cpath d='M32 27 v4 m-3.5 -3 l3.5 3.5 l3.5 -3.5' fill='none' stroke='%239aa3ab' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">`;
@@ -425,18 +428,20 @@ placerViseur();
 
 // ================= Zoom =================
 // Zoom matériel de la caméra si disponible (meilleure netteté), sinon zoom numérique (agrandissement de l'image).
-let zoomMat = null, zoomNum = 1, zoomEnCours = false;
+let zoomMat = null, zoomEnCours = false;
+let zoomNum = (() => { try { return +localStorage.getItem('tbZoom') || 0; } catch { return 0; } })();   // 0 = pas encore choisi
 function initZoom(cap) {
   const c = $('zoomCurseur');
   zoomMat = cap && cap.zoom && cap.zoom.max > cap.zoom.min ? cap.zoom : null;
   if (zoomMat) { c.min = zoomMat.min; c.max = Math.min(zoomMat.max, 10); c.step = zoomMat.step || 0.1; }
   else { c.min = 1; c.max = 4; c.step = 0.1; }
-  c.value = Math.min(Math.max(zoomNum, +c.min), +c.max);
+  // 1re utilisation : ×2 avec un zoom matériel (on tient le TB à ~20 cm, au-delà de la distance mini de mise au point)
+  c.value = Math.min(Math.max(zoomNum || (zoomMat ? 2 : 1), +c.min), +c.max);
   $('zoom').classList.add('on'); appliquerZoom();
 }
 async function appliquerZoom() {
   const v = +$('zoomCurseur').value; $('zoomVal').textContent = '×' + (Math.round(v * 10) / 10);
-  zoomNum = v;
+  zoomNum = v; try { localStorage.setItem('tbZoom', v); } catch {}
   if (zoomMat) {
     video.style.transform = $('gel').style.transform = '';
     if (zoomEnCours || !piste) return; zoomEnCours = true;
@@ -446,7 +451,7 @@ async function appliquerZoom() {
   } else video.style.transform = $('gel').style.transform = v > 1 ? `scale(${v})` : '';
 }
 $('zoomCurseur').addEventListener('input', appliquerZoom);
-const facteurZoomNum = () => zoomMat ? 1 : zoomNum;
+const facteurZoomNum = () => zoomMat ? 1 : (zoomNum || 1);
 
 // Rectangle du viseur converti en coordonnées de la vidéo (object-fit: cover)
 function zoneVideo() {
@@ -491,7 +496,11 @@ async function demarrerCamera() {
     video.srcObject = flux; await video.play();
     piste = flux.getVideoTracks()[0];
     capCam = piste.getCapabilities ? piste.getCapabilities() : {};
-    try { if (capCam.focusMode && capCam.focusMode.includes('continuous')) await piste.applyConstraints({ advanced:[{ focusMode:'continuous' }] }); } catch {}
+    const pres = $('btnPres'), fd = capCam.focusDistance;
+    pres.style.display = (capCam.focusMode || []).includes('manual') && fd && fd.max > fd.min ? '' : 'none';
+    if (pres.style.display === 'none') modePres = false;
+    pres.classList.toggle('actif', modePres);
+    await (modePres ? appliquerPres() : autoFocus());
     $('btnTorche').style.visibility = capCam.torch ? 'visible' : 'hidden';
     $('btnObjectif').style.display = camerasDos.length > 1 ? '' : 'none';
     initZoom(capCam);
@@ -521,9 +530,34 @@ $('btnObjectif').onclick = async () => {
   toast("Pas d'autre objectif utilisable", true);
 };
 
+// Autofocus continu, en visant le centre du viseur (sinon il fait souvent le point sur le fond, derrière la main)
+function pointViseur() {
+  const z = zoneVideo(), vw = video.videoWidth || 1, vh = video.videoHeight || 1;
+  return { x:Math.max(0, Math.min(1, (z.x + z.w / 2) / vw)), y:Math.max(0, Math.min(1, (z.y + z.h / 2) / vh)) };
+}
+async function autoFocus() {
+  if (!piste || !(capCam.focusMode || []).includes('continuous')) return;
+  try { await piste.applyConstraints({ advanced:[{ focusMode:'continuous', pointsOfInterest:[pointViseur()] }] }); }
+  catch { try { await piste.applyConstraints({ advanced:[{ focusMode:'continuous' }] }); } catch {} }
+}
+// 🌼 Près : mise au point manuelle bloquée au plus près (~12 cm), pour les plaques tenues tout contre l'objectif
+let modePres = (() => { try { return localStorage.getItem('tbPres') === '1'; } catch { return false; } })();
+async function appliquerPres() {
+  const fd = capCam.focusDistance; if (!piste || !fd) return;
+  const d = Math.min(fd.max, Math.max(fd.min, 0.12));
+  try { await piste.applyConstraints({ advanced:[{ focusMode:'manual', focusDistance:d }] }); } catch {}
+}
+$('btnPres').onclick = async () => {
+  modePres = !modePres; try { localStorage.setItem('tbPres', modePres ? '1' : '0'); } catch {}
+  $('btnPres').classList.toggle('actif', modePres);
+  toast(modePres ? '🌼 Mise au point de près (~12 cm)' : 'Mise au point automatique', true);
+  await (modePres ? appliquerPres() : autoFocus());
+};
+
 // Toucher l'image : mise au point à cet endroit (si le téléphone le permet), puis retour en continu
 async function mettreAuPoint(e) {
   if (!piste || fige) return;
+  if (modePres) { modePres = false; $('btnPres').classList.remove('actif'); try { localStorage.setItem('tbPres', '0'); } catch {} }
   const a = $('anneau'); a.style.left = e.clientX + 'px'; a.style.top = e.clientY + 'px';
   a.classList.remove('on'); void a.offsetWidth; a.classList.add('on');
   const modes = capCam.focusMode || [];
@@ -533,8 +567,7 @@ async function mettreAuPoint(e) {
   const x = borne((e.clientX - (innerWidth - vw * s) / 2) / s / vw), y = borne((e.clientY - (innerHeight - vh * s) / 2) / s / vh);
   try {
     await piste.applyConstraints({ advanced:[{ focusMode:modes.includes('single-shot') ? 'single-shot' : modes[0], pointsOfInterest:[{ x, y }] }] });
-    if (modes.includes('single-shot') && modes.includes('continuous'))
-      setTimeout(() => piste && piste.applyConstraints({ advanced:[{ focusMode:'continuous' }] }).catch(() => {}), 4000);
+    if (modes.includes('single-shot') && modes.includes('continuous')) setTimeout(() => { if (!modePres) autoFocus(); }, 4000);
   } catch {}
 }
 video.addEventListener('click', mettreAuPoint);
@@ -548,7 +581,8 @@ function diagCamera() {
     `Image : ${video.videoWidth}×${video.videoHeight}`,
     `Mise au point : ${(capCam.focusMode || []).join(', ') || 'non pilotable'}` + (st.focusMode ? ` (actuel : ${st.focusMode})` : ''),
     fd ? `Distance de mise au point : ${fd.min}–${fd.max}` : '',
-    `Zoom : ${zoomMat ? zoomMat.min + '–' + zoomMat.max + ' (matériel)' : 'numérique'}`,
+    `Zoom : ${zoomMat ? zoomMat.min + '–' + zoomMat.max + ' (matériel)' : 'numérique'}, actuel ×${zoomNum || 1}`,
+    `Mode près 🌼 : ${$('btnPres').style.display === 'none' ? 'indisponible' : modePres ? 'activé' : 'désactivé'}`,
     `Lampe : ${capCam.torch ? 'oui' : 'non'}`].filter(Boolean).join('\n');
 }
 
@@ -792,7 +826,7 @@ async function boucle() {
         if (liste[0] !== propose || stable) afficherProposition(liste, stable);
       } else if (!propose) {
         // après plusieurs secondes sans rien lire : probablement flou (trop près)
-        $('statut').textContent = ++lecturesVides > 10 ? 'Flou ? Recule à ~15 cm et zoome, ou touche l\'image' : 'Vise le code du TB…';
+        $('statut').textContent = ++lecturesVides > 10 ? 'Flou ? Tiens le TB à ~20 cm et zoome ×2–3, ou touche l\'image' : 'Vise le code du TB…';
       }
     } catch (e) { console.error(e); await new Promise(r => setTimeout(r, 500)); }
     await new Promise(r => setTimeout(r, 150));
