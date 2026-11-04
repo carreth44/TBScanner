@@ -1,3 +1,5 @@
 # Exports de codes de suivi (secrets) : ne jamais committer
 *.txt
 Exemples/
+# Notes de travail (restent en local, inutiles pour l'appli)
+CLAUDE.md
