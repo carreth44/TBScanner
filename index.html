@@ -66,6 +66,14 @@
   #zoom.on { display:flex; }
   #zoom input { writing-mode:vertical-lr; direction:rtl; flex:1; width:28px; margin:0; accent-color:var(--vertc); }
   #zoomVal { font-size:.7rem; opacity:.85; }
+  #btnObjectif { background:none; font-size:1.05rem; padding:2px 0 0; }
+  /* anneau de mise au point (toucher l'image) */
+  #anneau { position:fixed; width:72px; height:72px; margin:-36px 0 0 -36px; border:2px solid #fff; border-radius:50%;
+            pointer-events:none; opacity:0; z-index:3; }
+  #anneau.on { animation:anneau .9s ease-out; }
+  @keyframes anneau { 0% { opacity:1; transform:scale(1.4); } 40% { opacity:1; transform:scale(1); } 100% { opacity:0; transform:scale(1); } }
+  #diagCam { white-space:pre-line; font-family:ui-monospace,Menlo,Consolas,monospace; font-size:.8rem; background:#fff;
+             border-radius:8px; padding:8px; }
   #capture.gele { background:var(--orange); }
 
   /* ---- liste ---- */
@@ -200,7 +208,9 @@
   <input type="range" id="zoomCurseur" min="1" max="4" step="0.1" value="1" aria-label="Zoom">
   <span>－</span>
   <span id="zoomVal">×1</span>
+  <button id="btnObjectif" title="Changer d'objectif" style="display:none">🔄</button>
 </div>
+<div id="anneau"></div>
 
 <div id="erreurCam">
   <p id="erreurMsg">Impossible d'accéder à la caméra.</p>
@@ -274,8 +284,12 @@
       <li><b class="placeIcoDep"></b> : apparaît à la place de 🎒 quand le TB lu est déjà dans le sac → le déposer</li>
       <li>Récupération et dépôt : lien de la cache facultatif (« Partager » dans c:geo ou geocaching.com,
           puis 📋 Coller) ; la position GPS est notée en secours</li>
-      <li>Curseur à droite : zoom de la caméra</li>
+      <li>Curseur à droite : zoom de la caméra ; 🔄 sous le curseur : changer d'objectif (si l'image reste floue)</li>
+      <li>Toucher l'image : faire le point à cet endroit (si le téléphone le permet)</li>
+      <li>Image floue de près ? Recule le TB à ~15 cm et zoome : les objectifs ne font pas le point trop près</li>
     </ul>
+    <h3>Caméra (diagnostic)</h3>
+    <p id="diagCam">—</p>
     <p class="note">Geocaching®, Travel Bug® et Trackable sont des marques de Groundspeak, Inc. TBScanner est une
        appli personnelle non officielle, sans lien avec Groundspeak.</p>
   </div>
@@ -309,7 +323,7 @@
 
 <script>
 const $ = id => document.getElementById(id);
-const VERSION_APP = '1.6.1', DATE_VERSION = '03/11/2026';   // à incrémenter à chaque publication
+const VERSION_APP = '1.7.0', DATE_VERSION = '04/11/2026';   // à incrémenter à chaque publication
 const CLE = 'tbCodes.v1';
 // icône « déposer » dessinée (plaque TB qui tombe dans une boîte de cache), identique sur tous les téléphones
 const ICO_DEP = `<img class="ico" alt="déposer" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect x='8' y='40' width='48' height='21' rx='4' fill='%233a9a5e' stroke='%23174a2c' stroke-width='2.5'/%3E%3Crect x='6' y='34' width='52' height='9' rx='3' fill='%231f6b3d' stroke='%23174a2c' stroke-width='2.5'/%3E%3Crect x='27' y='42' width='10' height='7' rx='1.5' fill='%23d9c27a' stroke='%23174a2c' stroke-width='2'/%3E%3Cg stroke='%239aa3ab' stroke-width='2.2' stroke-linecap='round'%3E%3Cline x1='17' y1='6' x2='17' y2='16'/%3E%3Cline x1='47' y1='6' x2='47' y2='16'/%3E%3Cline x1='32' y1='2' x2='32' y2='6'/%3E%3C/g%3E%3Cg transform='rotate(-12 32 19)'%3E%3Crect x='21' y='10' width='22' height='16' rx='3.5' fill='%23c9ced3' stroke='%23555b61' stroke-width='2.2'/%3E%3Ccircle cx='26.5' cy='18' r='2' fill='%23555b61'/%3E%3Crect x='31' y='15' width='9' height='2.2' rx='1' fill='%23555b61'/%3E%3Crect x='31' y='19.5' width='6' height='2.2' rx='1' fill='%23555b61'/%3E%3C/g%3E%3Cpath d='M32 27 v4 m-3.5 -3 l3.5 3.5 l3.5 -3.5' fill='none' stroke='%239aa3ab' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">`;
@@ -444,19 +458,43 @@ function zoneVideo() {
 }
 
 // ================= Caméra =================
-let flux = null, piste = null, torche = false;
+// Sur les téléphones à plusieurs objectifs, Chrome ouvre parfois le grand-angle ou un objectif secondaire
+// (souvent sans autofocus, flou de près) : on prend l'objectif principal (« camera2 0 » sous Android) ;
+// 🔄 permet d'en essayer un autre (choix mémorisé dans tbCamera).
+let flux = null, piste = null, torche = false, capCam = {}, camerasDos = [];
+let camChoisie = (() => { try { return localStorage.getItem('tbCamera') || ''; } catch { return ''; } })();
+async function listerCamerasDos() {
+  try {
+    const toutes = (await navigator.mediaDevices.enumerateDevices()).filter(x => x.kind === 'videoinput');
+    const dos = toutes.filter(x => !/front|avant|user/i.test(x.label));
+    const num = x => { const m = x.label.match(/camera2?\s*(\d+)/i); return m ? +m[1] : 99; };   // 0 = principal en général
+    return (dos.length ? dos : toutes).sort((a, b) => num(a) - num(b));
+  } catch { return []; }
+}
+const ouvrir = v => navigator.mediaDevices.getUserMedia({ audio:false, video:{ ...v, width:{ ideal:1920 }, height:{ ideal:1080 } } });
 async function demarrerCamera() {
   try {
-    flux = await navigator.mediaDevices.getUserMedia({ audio:false,
-      video: { facingMode:{ ideal:'environment' }, width:{ ideal:1920 }, height:{ ideal:1080 } } });
+    if (flux) arreterCamera();
+    if (camChoisie) {
+      flux = await ouvrir({ deviceId:{ exact:camChoisie } }).catch(() => null);
+      if (!flux) { camChoisie = ''; try { localStorage.removeItem('tbCamera'); } catch {} }   // objectif disparu / refusé
+    }
+    if (!flux) flux = await ouvrir({ facingMode:{ ideal:'environment' } });
+    camerasDos = await listerCamerasDos();          // les noms des objectifs ne sont lisibles qu'après autorisation
+    if (!camChoisie && camerasDos.length > 1) {     // Chrome a pris un autre objectif que le principal ? on bascule
+      const actuelle = flux.getVideoTracks()[0].getSettings().deviceId, principale = camerasDos[0].deviceId;
+      if (principale && actuelle !== principale) {
+        const f = await ouvrir({ deviceId:{ exact:principale } }).catch(() => null);
+        if (f) { flux.getTracks().forEach(t => t.stop()); flux = f; }
+      }
+    }
     video.srcObject = flux; await video.play();
     piste = flux.getVideoTracks()[0];
-    try { // mise au point continue si dispo
-      const cap = piste.getCapabilities ? piste.getCapabilities() : {};
-      if (cap.focusMode && cap.focusMode.includes('continuous')) await piste.applyConstraints({ advanced:[{ focusMode:'continuous' }] });
-      if (cap.torch) $('btnTorche').style.visibility = 'visible';
-      initZoom(cap);
-    } catch { initZoom(null); }
+    capCam = piste.getCapabilities ? piste.getCapabilities() : {};
+    try { if (capCam.focusMode && capCam.focusMode.includes('continuous')) await piste.applyConstraints({ advanced:[{ focusMode:'continuous' }] }); } catch {}
+    $('btnTorche').style.visibility = capCam.torch ? 'visible' : 'hidden';
+    $('btnObjectif').style.display = camerasDos.length > 1 ? '' : 'none';
+    initZoom(capCam);
     $('erreurCam').style.display = 'none';
     return true;
   } catch (e) {
@@ -467,6 +505,52 @@ async function demarrerCamera() {
   }
 }
 function arreterCamera() { if (flux) flux.getTracks().forEach(t => t.stop()); flux = null; piste = null; torche = false; $('btnTorche').classList.remove('actif'); }
+
+// 🔄 : objectif suivant (choix mémorisé)
+// (un objectif qui refuse de s'ouvrir est sauté)
+$('btnObjectif').onclick = async () => {
+  const n = camerasDos.length; if (n < 2 || !piste) return;
+  const actuel = piste.getSettings().deviceId, i = camerasDos.findIndex(c => c.deviceId === actuel);
+  for (let k = 1; k < n + 1; k++) {
+    const c = camerasDos[(i + k + n) % n];
+    if (c.deviceId === actuel) break;
+    camChoisie = c.deviceId; try { localStorage.setItem('tbCamera', camChoisie); } catch {}
+    await demarrerCamera();
+    if (piste && piste.getSettings().deviceId === c.deviceId) { toast(`Objectif ${(i + k + n) % n + 1}/${n}`, true); return; }
+  }
+  toast("Pas d'autre objectif utilisable", true);
+};
+
+// Toucher l'image : mise au point à cet endroit (si le téléphone le permet), puis retour en continu
+async function mettreAuPoint(e) {
+  if (!piste || fige) return;
+  const a = $('anneau'); a.style.left = e.clientX + 'px'; a.style.top = e.clientY + 'px';
+  a.classList.remove('on'); void a.offsetWidth; a.classList.add('on');
+  const modes = capCam.focusMode || [];
+  if (!modes.length) return;
+  const vw = video.videoWidth, vh = video.videoHeight, s = Math.max(innerWidth / vw, innerHeight / vh) * facteurZoomNum();
+  const borne = v => Math.max(0, Math.min(1, v));
+  const x = borne((e.clientX - (innerWidth - vw * s) / 2) / s / vw), y = borne((e.clientY - (innerHeight - vh * s) / 2) / s / vh);
+  try {
+    await piste.applyConstraints({ advanced:[{ focusMode:modes.includes('single-shot') ? 'single-shot' : modes[0], pointsOfInterest:[{ x, y }] }] });
+    if (modes.includes('single-shot') && modes.includes('continuous'))
+      setTimeout(() => piste && piste.applyConstraints({ advanced:[{ focusMode:'continuous' }] }).catch(() => {}), 4000);
+  } catch {}
+}
+video.addEventListener('click', mettreAuPoint);
+
+// Diagnostic affiché dans À propos (à envoyer en capture d'écran si la caméra lit mal)
+function diagCamera() {
+  if (!piste) return 'Caméra non démarrée';
+  const st = piste.getSettings ? piste.getSettings() : {}, i = camerasDos.findIndex(c => c.deviceId === st.deviceId);
+  const fd = capCam.focusDistance;
+  return [`Objectif : ${piste.label || '?'} (${i + 1}/${camerasDos.length})`,
+    `Image : ${video.videoWidth}×${video.videoHeight}`,
+    `Mise au point : ${(capCam.focusMode || []).join(', ') || 'non pilotable'}` + (st.focusMode ? ` (actuel : ${st.focusMode})` : ''),
+    fd ? `Distance de mise au point : ${fd.min}–${fd.max}` : '',
+    `Zoom : ${zoomMat ? zoomMat.min + '–' + zoomMat.max + ' (matériel)' : 'numérique'}`,
+    `Lampe : ${capCam.torch ? 'oui' : 'non'}`].filter(Boolean).join('\n');
+}
 
 $('btnTorche').onclick = async () => {
   if (!piste) return;
@@ -666,7 +750,7 @@ function ocr(img, cote) {
 // ================= Scan en continu =================
 // État : on propose un code quand il est lu 2 fois de suite (stable), le champ reste modifiable.
 let fige = false, editionManuelle = false;
-let dernier = null, propose = null;
+let dernier = null, propose = null, lecturesVides = 0;
 
 function afficherProposition(liste, stable) {
   const ch = $('chips'); ch.innerHTML = '';
@@ -686,7 +770,7 @@ function choisir(c, stable) {
   if (stable && !deja) vibrer(30);
 }
 function reinitialiser(msg) {
-  propose = null; dernier = null; editionManuelle = false;
+  propose = null; dernier = null; editionManuelle = false; lecturesVides = 0;
   $('code').value = ''; $('code').classList.remove('ok'); $('chips').innerHTML = '';
   $('viseur').className = ''; majBoutons('');
   $('statut').textContent = msg || 'Vise le code du TB…';
@@ -702,11 +786,13 @@ async function boucle() {
       const liste = candidats(await ocr(preparer(video, zoneVideo(), 960), 960));
       if (fige || editionManuelle) continue;        // l'utilisateur a repris la main pendant la lecture
       if (liste.length) {
+        lecturesVides = 0;
         const stable = liste[0] === dernier || liste[0] === propose;
         dernier = liste[0];
         if (liste[0] !== propose || stable) afficherProposition(liste, stable);
       } else if (!propose) {
-        $('statut').textContent = 'Vise le code du TB…';
+        // après plusieurs secondes sans rien lire : probablement flou (trop près)
+        $('statut').textContent = ++lecturesVides > 10 ? 'Flou ? Recule à ~15 cm et zoome, ou touche l\'image' : 'Vise le code du TB…';
       }
     } catch (e) { console.error(e); await new Promise(r => setTimeout(r, 500)); }
     await new Promise(r => setTimeout(r, 150));
@@ -1080,7 +1166,7 @@ $('btnListe').onclick = () => { afficherListe(); $('panneau').classList.add('on'
 $('fermer').onclick = () => { $('panneau').classList.remove('on'); if (!flux) demarrerCamera(); };
 document.querySelectorAll('.placeIcoDep').forEach(e => e.innerHTML = ICO_DEP);
 $('version').textContent = `v${VERSION_APP} · ${DATE_VERSION}`;
-$('btnInfo').onclick = () => $('credits').classList.add('on');
+$('btnInfo').onclick = () => { $('diagCam').textContent = diagCamera(); $('credits').classList.add('on'); };
 $('fermerInfo').onclick = () => $('credits').classList.remove('on');
 
 $('telecharger').onclick = () => {
