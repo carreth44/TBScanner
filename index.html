@@ -66,15 +66,12 @@
   #zoom.on { display:flex; }
   #zoom input { writing-mode:vertical-lr; direction:rtl; flex:1; width:28px; margin:0; accent-color:var(--vertc); }
   #zoomVal { font-size:.7rem; opacity:.85; }
-  #btnObjectif, #btnPres { background:none; font-size:1.05rem; padding:2px 0 0; border-radius:50%; width:30px; height:30px; }
-  #btnPres.actif { background:var(--orange); }
+  #btnObjectif { background:none; font-size:1.05rem; padding:2px 0 0; border-radius:50%; width:30px; height:30px; }
   /* anneau de mise au point (toucher l'image) */
   #anneau { position:fixed; width:72px; height:72px; margin:-36px 0 0 -36px; border:2px solid #fff; border-radius:50%;
             pointer-events:none; opacity:0; z-index:3; }
   #anneau.on { animation:anneau .9s ease-out; }
   @keyframes anneau { 0% { opacity:1; transform:scale(1.4); } 40% { opacity:1; transform:scale(1); } 100% { opacity:0; transform:scale(1); } }
-  #diagCam { white-space:pre-line; font-family:ui-monospace,Menlo,Consolas,monospace; font-size:.8rem; background:#fff;
-             border-radius:8px; padding:8px; }
   #capture.gele { background:var(--orange); }
 
   /* ---- liste ---- */
@@ -216,7 +213,6 @@
   <input type="range" id="zoomCurseur" min="1" max="4" step="0.1" value="1" aria-label="Zoom">
   <span>－</span>
   <span id="zoomVal">×1</span>
-  <button id="btnPres" title="Mise au point de près (~12 cm)" style="display:none">🌼</button>
   <button id="btnObjectif" title="Changer d'objectif" style="display:none">🔄</button>
 </div>
 <div id="anneau"></div>
@@ -296,10 +292,7 @@
       <li>Curseur à droite : zoom de la caméra ; 🔄 sous le curseur : changer d'objectif (si l'image reste floue)</li>
       <li>Toucher l'image : faire le point à cet endroit (si le téléphone le permet)</li>
       <li>Image floue ? Tiens le TB à ~20 cm et zoome ×2–3 : l'objectif ne fait pas le point à moins de ~10 cm</li>
-      <li>🌼 (sous le curseur) : mise au point bloquée au plus près (~12 cm), pour les plaques tenues tout près</li>
     </ul>
-    <h3>Caméra (diagnostic)</h3>
-    <p id="diagCam">—</p>
     <p class="note">Geocaching®, Travel Bug® et Trackable sont des marques de Groundspeak, Inc. TBScanner est une
        appli personnelle non officielle, sans lien avec Groundspeak.</p>
   </div>
@@ -336,7 +329,7 @@
 
 <script>
 const $ = id => document.getElementById(id);
-const VERSION_APP = '1.8.1', DATE_VERSION = '04/11/2026';   // à incrémenter à chaque publication
+const VERSION_APP = '1.9.0', DATE_VERSION = '04/11/2026';   // à incrémenter à chaque publication
 const CLE = 'tbCodes.v1';
 // icône « déposer » dessinée (plaque TB qui tombe dans une boîte de cache), identique sur tous les téléphones
 const ICO_DEP = `<img class="ico" alt="déposer" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect x='8' y='40' width='48' height='21' rx='4' fill='%233a9a5e' stroke='%23174a2c' stroke-width='2.5'/%3E%3Crect x='6' y='34' width='52' height='9' rx='3' fill='%231f6b3d' stroke='%23174a2c' stroke-width='2.5'/%3E%3Crect x='27' y='42' width='10' height='7' rx='1.5' fill='%23d9c27a' stroke='%23174a2c' stroke-width='2'/%3E%3Cg stroke='%239aa3ab' stroke-width='2.2' stroke-linecap='round'%3E%3Cline x1='17' y1='6' x2='17' y2='16'/%3E%3Cline x1='47' y1='6' x2='47' y2='16'/%3E%3Cline x1='32' y1='2' x2='32' y2='6'/%3E%3C/g%3E%3Cg transform='rotate(-12 32 19)'%3E%3Crect x='21' y='10' width='22' height='16' rx='3.5' fill='%23c9ced3' stroke='%23555b61' stroke-width='2.2'/%3E%3Ccircle cx='26.5' cy='18' r='2' fill='%23555b61'/%3E%3Crect x='31' y='15' width='9' height='2.2' rx='1' fill='%23555b61'/%3E%3Crect x='31' y='19.5' width='6' height='2.2' rx='1' fill='%23555b61'/%3E%3C/g%3E%3Cpath d='M32 27 v4 m-3.5 -3 l3.5 3.5 l3.5 -3.5' fill='none' stroke='%239aa3ab' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">`;
@@ -506,11 +499,7 @@ async function demarrerCamera() {
     video.srcObject = flux; await video.play();
     piste = flux.getVideoTracks()[0];
     capCam = piste.getCapabilities ? piste.getCapabilities() : {};
-    const pres = $('btnPres'), fd = capCam.focusDistance;
-    pres.style.display = (capCam.focusMode || []).includes('manual') && fd && fd.max > fd.min ? '' : 'none';
-    if (pres.style.display === 'none') modePres = false;
-    pres.classList.toggle('actif', modePres);
-    await (modePres ? appliquerPres() : autoFocus());
+    await autoFocus();
     $('btnTorche').style.visibility = capCam.torch ? 'visible' : 'hidden';
     $('btnObjectif').style.display = camerasDos.length > 1 ? '' : 'none';
     initZoom(capCam);
@@ -550,24 +539,10 @@ async function autoFocus() {
   try { await piste.applyConstraints({ advanced:[{ focusMode:'continuous', pointsOfInterest:[pointViseur()] }] }); }
   catch { try { await piste.applyConstraints({ advanced:[{ focusMode:'continuous' }] }); } catch {} }
 }
-// 🌼 Près : mise au point manuelle bloquée au plus près (~12 cm), pour les plaques tenues tout contre l'objectif
-let modePres = (() => { try { return localStorage.getItem('tbPres') === '1'; } catch { return false; } })();
-async function appliquerPres() {
-  const fd = capCam.focusDistance; if (!piste || !fd) return;
-  const d = Math.min(fd.max, Math.max(fd.min, 0.12));
-  try { await piste.applyConstraints({ advanced:[{ focusMode:'manual', focusDistance:d }] }); } catch {}
-}
-$('btnPres').onclick = async () => {
-  modePres = !modePres; try { localStorage.setItem('tbPres', modePres ? '1' : '0'); } catch {}
-  $('btnPres').classList.toggle('actif', modePres);
-  toast(modePres ? '🌼 Mise au point de près (~12 cm)' : 'Mise au point automatique', true);
-  await (modePres ? appliquerPres() : autoFocus());
-};
 
 // Toucher l'image : mise au point à cet endroit (si le téléphone le permet), puis retour en continu
 async function mettreAuPoint(e) {
   if (!piste || fige) return;
-  if (modePres) { modePres = false; $('btnPres').classList.remove('actif'); try { localStorage.setItem('tbPres', '0'); } catch {} }
   const a = $('anneau'); a.style.left = e.clientX + 'px'; a.style.top = e.clientY + 'px';
   a.classList.remove('on'); void a.offsetWidth; a.classList.add('on');
   const modes = capCam.focusMode || [];
@@ -577,24 +552,10 @@ async function mettreAuPoint(e) {
   const x = borne((e.clientX - (innerWidth - vw * s) / 2) / s / vw), y = borne((e.clientY - (innerHeight - vh * s) / 2) / s / vh);
   try {
     await piste.applyConstraints({ advanced:[{ focusMode:modes.includes('single-shot') ? 'single-shot' : modes[0], pointsOfInterest:[{ x, y }] }] });
-    if (modes.includes('single-shot') && modes.includes('continuous')) setTimeout(() => { if (!modePres) autoFocus(); }, 4000);
+    if (modes.includes('single-shot') && modes.includes('continuous')) setTimeout(autoFocus, 4000);
   } catch {}
 }
 video.addEventListener('click', mettreAuPoint);
-
-// Diagnostic affiché dans À propos (à envoyer en capture d'écran si la caméra lit mal)
-function diagCamera() {
-  if (!piste) return 'Caméra non démarrée';
-  const st = piste.getSettings ? piste.getSettings() : {}, i = camerasDos.findIndex(c => c.deviceId === st.deviceId);
-  const fd = capCam.focusDistance;
-  return [`Objectif : ${piste.label || '?'} (${i + 1}/${camerasDos.length})`,
-    `Image : ${video.videoWidth}×${video.videoHeight}`,
-    `Mise au point : ${(capCam.focusMode || []).join(', ') || 'non pilotable'}` + (st.focusMode ? ` (actuel : ${st.focusMode})` : ''),
-    fd ? `Distance de mise au point : ${fd.min}–${fd.max}` : '',
-    `Zoom : ${zoomMat ? zoomMat.min + '–' + zoomMat.max + ' (matériel)' : 'numérique'}, actuel ×${zoomNum || 1}`,
-    `Mode près 🌼 : ${$('btnPres').style.display === 'none' ? 'indisponible' : modePres ? 'activé' : 'désactivé'}`,
-    `Lampe : ${capCam.torch ? 'oui' : 'non'}`].filter(Boolean).join('\n');
-}
 
 $('btnTorche').onclick = async () => {
   if (!piste) return;
@@ -1213,7 +1174,7 @@ $('btnListe').onclick = () => { afficherListe(); $('panneau').classList.add('on'
 $('fermer').onclick = () => { $('panneau').classList.remove('on'); if (!flux) demarrerCamera(); };
 document.querySelectorAll('.placeIcoDep').forEach(e => e.innerHTML = ICO_DEP);
 $('version').textContent = `v${VERSION_APP} · ${DATE_VERSION}`;
-$('btnInfo').onclick = () => { $('diagCam').textContent = diagCamera(); $('credits').classList.add('on'); };
+$('btnInfo').onclick = () => $('credits').classList.add('on');
 $('fermerInfo').onclick = () => $('credits').classList.remove('on');
 
 $('telecharger').onclick = () => {
@@ -1245,6 +1206,7 @@ $('vider').onclick = () => {
 
 // ================= Démarrage =================
 // Appli installable et utilisable hors ligne (sw.js) ; stockage persistant pour que le moteur (~30 Mo) ne soit pas effacé
+try { localStorage.removeItem('tbPres'); } catch {}          // reste du mode Près (v1.8), supprimé
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(e => console.warn('service worker :', e));
 // Nouvelle version en ligne ? (au démarrage et à chaque retour dans l'appli) → bandeau « Mettre à jour »
 let majIgnoree = '';
