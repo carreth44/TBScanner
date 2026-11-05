@@ -211,7 +211,7 @@
       <button class="petit" id="btnEffacer">✕ Effacer</button>
       <button class="petit" id="btnRafale" title="Mode rafale : enregistre tout seul chaque nouveau code (découvert)">⚡ Rafale</button>
     </span>
-    <button id="capture" title="Figer l'image (optionnel)"></button>
+    <button id="capture" title="Prendre une photo : elle est lue puis enregistrée dans Téléchargements"></button>
     <button class="petit" id="btnTorche" title="Lampe" style="visibility:hidden">🔦 Lampe</button>
   </div>
   <div class="valrow">
@@ -305,6 +305,8 @@
       <li>Liste : toucher un code pour le corriger ; ✕ efface la ligne une fois loguée, 🧹 tout le jour
           (un TB du sac reste dans le sac)</li>
       <li>Toucher le titre « TBScanner » : cette page À propos</li>
+      <li>Bouton rond : prend une vraie photo, la lit et l'enregistre dans Téléchargements (TBScanner_date_code.jpg),
+          visible dans la Galerie (album « Download ») ; 2e appui pour reprendre la visée</li>
       <li>Curseur à droite : zoom de la caméra ; 🔄 sous le curseur : changer d'objectif (si l'image reste floue)</li>
       <li>Toucher l'image : faire le point à cet endroit (si le téléphone le permet)</li>
       <li>Image floue ? Tiens le TB à ~20 cm et zoome ×2–3 : l'objectif ne fait pas le point à moins de ~10 cm</li>
@@ -345,7 +347,7 @@
 
 <script>
 const $ = id => document.getElementById(id);
-const VERSION_APP = '1.11.0', DATE_VERSION = '04/11/2026';   // à incrémenter à chaque publication
+const VERSION_APP = '1.12.0', DATE_VERSION = '05/11/2026';   // à incrémenter à chaque publication
 const CLE = 'tbCodes.v1';
 // icône « déposer » dessinée (plaque TB qui tombe dans une boîte de cache), identique sur tous les téléphones
 const ICO_DEP = `<img class="ico" alt="déposer" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect x='8' y='40' width='48' height='21' rx='4' fill='%233a9a5e' stroke='%23174a2c' stroke-width='2.5'/%3E%3Crect x='6' y='34' width='52' height='9' rx='3' fill='%231f6b3d' stroke='%23174a2c' stroke-width='2.5'/%3E%3Crect x='27' y='42' width='10' height='7' rx='1.5' fill='%23d9c27a' stroke='%23174a2c' stroke-width='2'/%3E%3Cg stroke='%239aa3ab' stroke-width='2.2' stroke-linecap='round'%3E%3Cline x1='17' y1='6' x2='17' y2='16'/%3E%3Cline x1='47' y1='6' x2='47' y2='16'/%3E%3Cline x1='32' y1='2' x2='32' y2='6'/%3E%3C/g%3E%3Cg transform='rotate(-12 32 19)'%3E%3Crect x='21' y='10' width='22' height='16' rx='3.5' fill='%23c9ced3' stroke='%23555b61' stroke-width='2.2'/%3E%3Ccircle cx='26.5' cy='18' r='2' fill='%23555b61'/%3E%3Crect x='31' y='15' width='9' height='2.2' rx='1' fill='%23555b61'/%3E%3Crect x='31' y='19.5' width='6' height='2.2' rx='1' fill='%23555b61'/%3E%3C/g%3E%3Cpath d='M32 27 v4 m-3.5 -3 l3.5 3.5 l3.5 -3.5' fill='none' stroke='%239aa3ab' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">`;
@@ -854,19 +856,53 @@ async function boucle() {
 }
 
 // ================= Capture (optionnelle) : fige l'image et lit à fond =================
+// Bouton rond : vraie photo pleine résolution (ImageCapture, avec mise au point), lue en entier comme en mode
+// galerie, puis téléchargée automatiquement (Téléchargements → album « Download » de la Galerie ; une page web ne
+// peut pas choisir de sous-dossier). Nom : TBScanner_AAAAMMJJ_HHMMSS[_CODE].jpg. Second appui : reprendre.
+let photoEnCours = false;
+async function prendrePhoto() {
+  if (piste && 'ImageCapture' in window) {
+    try {
+      const ic = new ImageCapture(piste), reglages = {};
+      try {
+        const pc = await ic.getPhotoCapabilities();
+        if (pc.imageWidth && pc.imageWidth.max) reglages.imageWidth = Math.min(pc.imageWidth.max, 4032);   // assez net, pas 50 Mpx
+        if ((pc.fillLightMode || []).includes('off') && !torche) reglages.fillLightMode = 'off';           // pas de flash surprise
+      } catch {}
+      const blob = await ic.takePhoto(reglages);
+      return { blob, img:await createImageBitmap(blob, { imageOrientation:'from-image' }) };
+    } catch (e) { console.warn('photo pleine résolution impossible, image vidéo utilisée :', e); }
+  }
+  const c = document.createElement('canvas'); c.width = video.videoWidth; c.height = video.videoHeight;
+  c.getContext('2d').drawImage(video, 0, 0);
+  return { blob:await new Promise(ok => c.toBlob(ok, 'image/jpeg', .92)), img:c };
+}
+function telechargerPhoto(blob, code) {
+  const d = new Date(), z = n => String(n).padStart(2, '0');
+  const nom = `TBScanner_${d.getFullYear()}${z(d.getMonth() + 1)}${z(d.getDate())}_${z(d.getHours())}${z(d.getMinutes())}${z(d.getSeconds())}`
+            + (code ? '_' + code : '') + '.jpg';
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = nom;
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+  return nom;
+}
 async function capturer() {
-  if (!moteur || !video.videoWidth) return;
+  if (photoEnCours || !video.videoWidth) return;
   if (fige) { degeler(); return; }
-  fige = true; $('capture').classList.add('gele');
-  const z = zoneVideo(), g = $('gel');
-  g.width = video.videoWidth; g.height = video.videoHeight;
-  g.getContext('2d').drawImage(video, 0, 0); g.style.display = 'block';
-  $('statut').textContent = 'Lecture de la capture…';
+  photoEnCours = true; fige = true; $('capture').classList.add('gele');
+  $('statut').textContent = '📷 Photo…';
   try {
-    const liste = candidats(await ocr(preparer(g, z, 1600), 960));
+    const { blob, img } = await prendrePhoto();
+    const g = $('gel'); g.width = img.width; g.height = img.height;
+    g.getContext('2d').drawImage(img, 0, 0); g.style.display = 'block';
+    $('statut').textContent = 'Lecture de la photo…';
+    let liste = [];
+    try { liste = candidats(await ocr(preparer(img, { x:0, y:0, w:img.width, h:img.height }, 1600), 960)); }
+    catch (e) { console.error(e); }
+    telechargerPhoto(blob, liste[0]); toast('📷 Photo enregistrée (Téléchargements)', true);
     if (liste.length) afficherProposition(liste, true);
-    else $('statut').textContent = 'Rien trouvé sur la capture : saisis le code ou retouche ⏺ pour reprendre';
+    else $('statut').textContent = 'Photo enregistrée, aucun code lu : saisis-le, ou retouche ⏺ pour reprendre';
   } catch (e) { $('statut').textContent = '⚠️ ' + (e.message || e); }
+  photoEnCours = false;
 }
 function degeler() { fige = false; $('capture').classList.remove('gele'); $('gel').style.display = 'none'; }
 $('capture').onclick = capturer;

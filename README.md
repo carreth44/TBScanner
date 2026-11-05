@@ -18,6 +18,8 @@ geocaching.com.
 
 - **Caméra** : placer le code dans le cadre, à ~20 cm, et zoomer avec le curseur de droite si besoin.
   Toucher l'image fait le point ; 🔄 change d'objectif si l'image reste floue.
+- **Bouton rond** : prend une vraie photo, lit le code et l'enregistre dans Téléchargements
+  (`TBScanner_date_code.jpg`, visible dans la Galerie, album « Download »). Second appui pour reprendre la visée.
 - **🖼️ Photos** : choisir des photos de la galerie, elles sont lues une à une.
 - **🔍 Découvrir** : TB vu et laissé sur place.
 - **🎒 Récupérer** : TB emporté, il va dans « Mon sac ». Quand on relit un TB du sac, le bouton devient
