@@ -30,8 +30,8 @@ geocaching.com.
 - **📋 Liste** : codes groupés par jour, export `.txt` (partager, télécharger ou copier) à coller sur le site de
   log. Toucher un code pour le corriger ; ✕ efface une ligne une fois loguée, « 🧹 Effacer le jour » toute la
   journée (un TB du sac reste dans le sac).
-- **↗ Loguer** (liste et sac) : ouvre le TB dans l'appli Geocaching pour le loguer, ou à défaut sa page sur
-  geocaching.com.
+- **↗ Loguer** (liste et sac) : ouvre le TB dans **c:geo** pour le loguer, ou à défaut sa page sur
+  geocaching.com (l'appli officielle Geocaching ne sait pas ouvrir un TB depuis un lien).
 - **À propos** : toucher le titre « TBScanner ».
 
 ## Vie privée
