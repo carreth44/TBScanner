@@ -98,6 +98,8 @@
   .item input.editCode { font:inherit; letter-spacing:2px; width:7.5em; padding:2px 4px; border:2px solid #2e8b57; border-radius:6px;
                          text-transform:uppercase; }
   .item small { color:#888; margin-left:8px; letter-spacing:0; font-family:system-ui; }
+  .item a.loguer { margin-left:8px; font-size:.8rem; letter-spacing:0; font-family:system-ui; color:#1f5f3a; background:#e3efe7;
+                   border-radius:8px; padding:2px 7px; text-decoration:none; white-space:nowrap; }
   .item button { background:none; color:#b33; font-size:1.2rem; padding:4px 8px; }
   .item button.sac { filter:grayscale(1); opacity:.35; }          /* 🎒 : toucher pour passer en « récupéré » */
   .item button.sac.oui { filter:none; opacity:1; }
@@ -305,6 +307,7 @@
       <li>Liste : toucher un code pour le corriger ; ✕ efface la ligne une fois loguée, 🧹 tout le jour
           (un TB du sac reste dans le sac)</li>
       <li>Toucher le titre « TBScanner » : cette page À propos</li>
+      <li><b>↗ Loguer</b> (liste et sac) : ouvre le TB dans l'appli Geocaching, ou à défaut sa page sur geocaching.com</li>
       <li>Bouton rond : prend une vraie photo, la lit et l'enregistre dans Téléchargements (TBScanner_date_code.jpg),
           visible dans la Galerie (album « Download ») ; 2e appui pour reprendre la visée</li>
       <li>Curseur à droite : zoom de la caméra ; 🔄 sous le curseur : changer d'objectif (si l'image reste floue)</li>
@@ -347,7 +350,7 @@
 
 <script>
 const $ = id => document.getElementById(id);
-const VERSION_APP = '1.12.0', DATE_VERSION = '05/11/2026';   // à incrémenter à chaque publication
+const VERSION_APP = '1.13.0', DATE_VERSION = '09/11/2026';   // à incrémenter à chaque publication
 const CLE = 'tbCodes.v1';
 // icône « déposer » dessinée (plaque TB qui tombe dans une boîte de cache), identique sur tous les téléphones
 const ICO_DEP = `<img class="ico" alt="déposer" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect x='8' y='40' width='48' height='21' rx='4' fill='%233a9a5e' stroke='%23174a2c' stroke-width='2.5'/%3E%3Crect x='6' y='34' width='52' height='9' rx='3' fill='%231f6b3d' stroke='%23174a2c' stroke-width='2.5'/%3E%3Crect x='27' y='42' width='10' height='7' rx='1.5' fill='%23d9c27a' stroke='%23174a2c' stroke-width='2'/%3E%3Cg stroke='%239aa3ab' stroke-width='2.2' stroke-linecap='round'%3E%3Cline x1='17' y1='6' x2='17' y2='16'/%3E%3Cline x1='47' y1='6' x2='47' y2='16'/%3E%3Cline x1='32' y1='2' x2='32' y2='6'/%3E%3C/g%3E%3Cg transform='rotate(-12 32 19)'%3E%3Crect x='21' y='10' width='22' height='16' rx='3.5' fill='%23c9ced3' stroke='%23555b61' stroke-width='2.2'/%3E%3Ccircle cx='26.5' cy='18' r='2' fill='%23555b61'/%3E%3Crect x='31' y='15' width='9' height='2.2' rx='1' fill='%23555b61'/%3E%3Crect x='31' y='19.5' width='6' height='2.2' rx='1' fill='%23555b61'/%3E%3C/g%3E%3Cpath d='M32 27 v4 m-3.5 -3 l3.5 3.5 l3.5 -3.5' fill='none' stroke='%239aa3ab' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">`;
@@ -1216,6 +1219,20 @@ function editerCode(c, el) {
   ch.addEventListener('keydown', e => { if (e.key === 'Enter') terminer(true); if (e.key === 'Escape') terminer(false); });
   ch.addEventListener('blur', () => terminer(true));
 }
+// ↗ Loguer : ouvre le TB dans l'appli Geocaching (Android : lien « intent » vers son paquet) ; si l'appli
+// n'est pas là ou ne sait pas ouvrir la page, Chrome ouvre la page de suivi du TB sur geocaching.com.
+// Le code de suivi n'est envoyé au site que si l'utilisateur touche le lien (c'est là qu'il le logue de toute façon).
+const PAQUET_GEOCACHING = 'com.groundspeak.geocaching.intro';
+const urlSuivi = code => 'https://www.geocaching.com/track/details.aspx?tracker=' + encodeURIComponent(code);
+function lienLoguer(code) {
+  const a = document.createElement('a'); a.className = 'loguer'; a.textContent = '↗ Loguer'; a.target = '_blank'; a.rel = 'noopener';
+  a.title = "Ouvrir ce TB dans l'appli Geocaching pour le loguer";
+  a.href = /Android/i.test(navigator.userAgent)
+    ? `intent://www.geocaching.com/track/details.aspx?tracker=${encodeURIComponent(code)}#Intent;scheme=https;package=${PAQUET_GEOCACHING};`
+      + `S.browser_fallback_url=${encodeURIComponent(urlSuivi(code))};end`
+    : urlSuivi(code);
+  return a;
+}
 function texteCode(c) {
   const el = document.createElement('span'); el.className = 'codeTxt'; el.textContent = c.code; el.title = 'Toucher pour corriger';
   el.onclick = () => editerCode(c, el);
@@ -1231,6 +1248,7 @@ function ligneCode(c, type, parent) {
   const it = document.createElement('div'); it.className = 'item';
   const s = document.createElement('span'); s.className = 'mono'; s.appendChild(texteCode(c));
   const t = document.createElement('small'); t.textContent = heure(type === 'dep' ? c.depose.date : c.date); s.appendChild(t);
+  s.appendChild(lienLoguer(c.code));
   if (type === 'rec') {
     s.appendChild(phraseLieu('récupéré', c.lieuRecup));                       // 1re ligne : d'où il vient
     if (c.depose) s.appendChild(phraseLieu('déposé le ' + jourCourt(c.depose.date), c.depose));   // 2e ligne : où il est
@@ -1282,7 +1300,7 @@ function afficherSac() {
   if (!liste.length) { L.innerHTML = '<div class="vide">Ton sac est vide</div>'; return; }
   for (const c of liste) {
     const it = document.createElement('div'); it.className = 'item';
-    const s = document.createElement('span'); s.className = 'mono'; s.appendChild(texteCode(c));
+    const s = document.createElement('span'); s.className = 'mono'; s.appendChild(texteCode(c)); s.appendChild(lienLoguer(c.code));
     s.appendChild(phraseLieu('récupéré le ' + jourCourt(c.date) + ' à ' + heure(c.date), c.lieuRecup));
     // ✕ = sortir du sac (le TB reste dans la liste comme découvert)
     it.append(s, bouton(ICO_DEP, 'dep', 'Déposer', () => deposerDepuisListe(c)),
